@@ -1,33 +1,21 @@
-'use client';
+"use client";
 import React from 'react';
-import {
-  PieChart,
-  Calculator,
-  Megaphone,
-  FileText,
-  Hammer,
-  BarChart,
-  Users,
-  LayoutGrid,
-  Search,
-  Bell,
-  TrendingUp,
-  Globe,
-  Wrench,
-  Plus,
-  Home,
-  Briefcase,
-  Settings,
+import Link from 'next/link'; // 👈 關鍵：引入 Next.js 的跳轉元件
+import { 
+  PieChart, Calculator, Megaphone, FileText, 
+  Hammer, BarChart, Users, LayoutGrid,
+  Search, Bell, TrendingUp, Globe, Wrench, Plus, Home, Briefcase, Settings
 } from 'lucide-react';
 
 export default function MujuDashboard() {
+  // 這裡的「資產管家」已經加上了 href 屬性
   const tools = [
-    { label: '資產管家', icon: PieChart, color: '#8E7F74' },
+    { label: '資產管家', icon: PieChart, color: '#8E7F74', href: '/properties' },
     { label: '投報試算', icon: Calculator, color: '#2196F3' },
     { label: '智能招租', icon: Megaphone, color: '#FF9800' },
     { label: '合約製作', icon: FileText, color: '#4CAF50' },
     { label: '報修派遣', icon: Hammer, color: '#F44336' },
-    { label: '現金流', icon: BarChart, color: '#9C27B0' }, // ⚠️ 這裡換成了絕對安全的 BarChart
+    { label: '現金流', icon: BarChart, color: '#9C27B0' },
     { label: '租客管理', icon: Users, color: '#009688' },
     { label: '更多功能', icon: LayoutGrid, color: '#9E9E9E' },
   ];
@@ -37,9 +25,7 @@ export default function MujuDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between p-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C8B6A6] font-bold text-white">
-            M
-          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C8B6A6] font-bold text-white">M</div>
           <div>
             <h1 className="text-sm font-bold tracking-tight">MUJU</h1>
             <p className="text-[10px] text-[#A8998C]">RESIDENCE</p>
@@ -52,11 +38,7 @@ export default function MujuDashboard() {
       </div>
 
       <div className="px-6">
-        <h2 className="my-6 text-3xl font-bold leading-tight">
-          FEBRUARY 25
-          <br />
-          早安，Nilson
-        </h2>
+        <h2 className="my-6 text-3xl font-bold leading-tight">FEBRUARY 25<br />早安，Nilson</h2>
 
         {/* 系統連動測試 */}
         <div className="mb-6 rounded-3xl bg-[#2D2621] p-5 shadow-lg">
@@ -76,9 +58,7 @@ export default function MujuDashboard() {
           <p className="text-xs text-white/80">本月實收租金</p>
           <div className="my-4 flex items-center justify-between">
             <span className="text-4xl font-bold text-white">$142,500</span>
-            <div className="rounded-full bg-white/20 p-2 text-white">
-              <TrendingUp size={20} />
-            </div>
+            <div className="rounded-full bg-white/20 p-2 text-white"><TrendingUp size={20} /></div>
           </div>
           <div className="flex gap-3">
             <div className="flex-1 rounded-2xl bg-white/10 p-4">
@@ -95,14 +75,29 @@ export default function MujuDashboard() {
         {/* 專業工具箱 */}
         <h3 className="mb-5 text-sm font-bold text-[#8E7F74]">專業工具箱</h3>
         <div className="grid grid-cols-4 gap-y-6">
-          {tools.map((item, idx) => (
-            <div key={idx} className="flex flex-col items-center">
-              <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-md">
-                <item.icon size={24} color={item.color} />
+          {tools.map((item, idx) => {
+            // 先把每個 Icon 卡片的樣式打包起來
+            const ToolContent = (
+              <div className="flex cursor-pointer flex-col items-center transition-transform hover:scale-105 active:scale-95">
+                <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-md">
+                  <item.icon size={24} color={item.color} />
+                </div>
+                <span className="text-[10px] font-medium">{item.label}</span>
               </div>
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </div>
-          ))}
+            );
+
+            // 判斷：如果有給路徑 (href)，就套上 Next.js 的 Link 讓它能點擊跳轉
+            if (item.href) {
+              return (
+                <Link href={item.href} key={idx}>
+                  {ToolContent}
+                </Link>
+              );
+            }
+            
+            // 判斷：如果沒有路徑，就當作普通的不可點擊圖示
+            return <div key={idx}>{ToolContent}</div>;
+          })}
         </div>
       </div>
 

@@ -1,262 +1,61 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, UserPlus, Phone, Calendar, AlertCircle, CheckCircle2, Loader2, Home, X, Edit, Plus, BadgeDollarSign, ShieldCheck } from 'lucide-react';
-// 確保路徑是退四層
-import { supabase } from '../../../../lib/supabase';
 
-export default function TenantsPage() {
-  const params = useParams();
-  const propertyId = params.id as string;
-  
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../../../lib/supabase'; // 四層路徑
+import { ArrowLeft, Save, Home, Coins, ShieldCheck, Info, Loader2 } from 'lucide-react';
 
-  // --- 租客/合約表單狀態 ---
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRoom, setEditingRoom] = useState<any>(null); 
-  const [isSaving, setIsSaving] = useState(false);
-  
-  const [formData, setFormData] = useState({
-    tenant_name: '',
-    rent_amount: '',
-    deposit: '',      
-    management_fee: '', 
-    phone: '',
-    contract_end: ''
-  });
+interface Tenant { id: string; room_number: string; tenant_name: string; rent_amount: number; management_fee: number; space_usage_fee: number; fee_description: string; }
 
-  // --- 新增房間表單狀態 ---
-  const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
-  const [newRoomNumber, setNewRoomNumber] = useState('');
-  const [isAddingRoom, setIsAddingRoom] = useState(false);
+export default function TenantsPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  const [rooms, setRooms] = useState<Tenant[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchRooms();
-  }, [propertyId]);
-
-  const fetchRooms = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('property_id', propertyId)
-        .order('room_number', { ascending: true });
-
-      if (error) throw error;
-      if (data) setRooms(data);
-    } catch (error: any) {
-      console.error('讀取租客資料失敗:', error.message);
-    } finally {
-      setIsLoading(false);
+    async function fetchTenants() {
+      const { data } = await supabase.from('rooms').select('*').eq('property_id', params.id).order('room_number', { ascending: true });
+      if (data) {
+        setRooms(data.map((r: any) => ({ ...r, rent_amount: Number(r.rent_amount || 0), management_fee: Number(r.management_fee || 0), space_usage_fee: Number(r.space_usage_fee || 0), fee_description: r.fee_description || '含水費、網路' })));
+      }
     }
-  };
+    fetchTenants();
+  }, [params.id]);
 
-  const openModal = (room: any) => {
-    setEditingRoom(room);
-    setFormData({
-      tenant_name: room.tenant_name || '',
-      rent_amount: room.rent_amount || '',
-      deposit: room.deposit || '',       
-      management_fee: room.management_fee || '', 
-      phone: room.phone || '',
-      contract_end: room.contract_end || ''
-    });
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingRoom(null);
-  };
-
-  const handleSave = async () => {
-    if (!formData.tenant_name) {
-      alert('請輸入租客姓名');
-      return;
-    }
-    
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('rooms')
-        .update({
-          tenant_name: formData.tenant_name,
-          rent_amount: formData.rent_amount ? Number(formData.rent_amount) : null,
-          deposit: formData.deposit ? Number(formData.deposit) : null,             
-          management_fee: formData.management_fee ? Number(formData.management_fee) : null, 
-          phone: formData.phone,
-          contract_end: formData.contract_end || null
-        })
-        .eq('id', editingRoom.id); 
-
-      if (error) throw error;
-      alert('✅ 資料儲存成功！');
-      closeModal();
-      fetchRooms(); 
-    } catch (error: any) {
-      alert('❌ 儲存失敗：' + error.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleAddRoom = async () => {
-    if (!newRoomNumber) {
-      alert('請輸入房號');
-      return;
-    }
-    setIsAddingRoom(true);
-    try {
-      const { error } = await supabase
-        .from('rooms')
-        .insert([{ 
-          property_id: propertyId, 
-          room_number: newRoomNumber 
-        }]);
-        
-      if (error) throw error;
-      alert(`✅ 成功建立 ${newRoomNumber} 房！`);
-      setIsAddRoomModalOpen(false);
-      setNewRoomNumber('');
-      fetchRooms();
-    } catch (error: any) {
-      alert('❌ 新增房間失敗：' + error.message);
-    } finally {
-      setIsAddingRoom(false);
-    }
+  const handleSave = async (room: Tenant) => {
+    await supabase.from('rooms').update({ rent_amount: room.rent_amount, management_fee: room.management_fee, space_usage_fee: room.space_usage_fee, fee_description: room.fee_description }).eq('id', room.id);
+    setEditingId(null);
+    alert('費用更新成功！');
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F7F5] pb-24 text-[#3E342E]">
-      <div className="flex items-center justify-between bg-white p-5 shadow-sm">
-        <Link href={`/properties/${propertyId}`} className="rounded-full p-2">
-          <ArrowLeft size={24} color="#3E342E" />
-        </Link>
-        <h1 className="text-lg font-bold text-[#8E7F74]">租客管理</h1>
-        <div className="w-10"></div>
+    <div className="min-h-screen bg-[#F9F7F5] font-sans text-[#3E342E]">
+      <div className="px-6 py-6 flex items-center justify-between"><button onClick={() => router.back()} className="p-2"><ArrowLeft className="w-6 h-6" /></button><h1 className="text-lg font-black text-[#8E7F74]">租務管理</h1><div className="w-10"></div></div>
+      <div className="px-6 space-y-4">
+        {rooms.map((room) => (
+          <div key={room.id} className="bg-white rounded-[32px] p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-6"><h3 className="font-black text-lg">{room.room_number} 房 - {room.tenant_name || '待出租'}</h3><button onClick={() => setEditingId(editingId === room.id ? null : room.id)} className="text-[10px] font-black text-[#8E7F74] bg-[#F9F7F5] px-4 py-1.5 rounded-full">{editingId === room.id ? '取消' : '編輯'}</button></div>
+            {editingId === room.id ? (
+              <div className="space-y-4">
+                <InputRow label="租金" value={room.rent_amount} onChange={(v: number) => setRooms(prev => prev.map(r => r.id === room.id ? {...r, rent_amount: v} : r))} />
+                <InputRow label="管理費" value={room.management_fee} onChange={(v: number) => setRooms(prev => prev.map(r => r.id === room.id ? {...r, management_fee: v} : r))} />
+                <InputRow label="空間費" value={room.space_usage_fee} onChange={(v: number) => setRooms(prev => prev.map(r => r.id === room.id ? {...r, space_usage_fee: v} : r))} />
+                <div className="space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">費用備註</label><input value={room.fee_description} onChange={(e) => setRooms(prev => prev.map(r => r.id === room.id ? {...r, fee_description: e.target.value} : r))} className="w-full h-12 bg-[#F9F7F5] rounded-xl px-4 text-sm font-bold outline-none" /></div>
+                <button onClick={() => handleSave(room)} className="w-full h-14 bg-[#3E342E] text-white rounded-2xl font-black flex justify-center items-center gap-2"><Save className="w-4 h-4" /> 儲存</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                <FeeBox label="租金" val={room.rent_amount} icon={<Home className="w-3 h-3" />} />
+                <FeeBox label="管理費" val={room.management_fee} icon={<ShieldCheck className="w-3 h-3" />} />
+                <FeeBox label="空間費" val={room.space_usage_fee} icon={<Coins className="w-3 h-3" />} />
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-
-      <div className="p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[#8E7F74]">房間列表</h2>
-          <button 
-            onClick={() => setIsAddRoomModalOpen(true)} 
-            className="flex items-center gap-1 rounded-full bg-[#3E342E] px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-black"
-          >
-            <Plus size={14} /> 新增房間
-          </button>
-        </div>
-
-        {isLoading ? (
-          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#8E7F74]" /></div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {rooms.map(room => (
-              <div key={room.id} className={`overflow-hidden rounded-3xl border-2 transition-all ${room.tenant_name ? 'border-transparent bg-white shadow-sm' : 'border-[#EFEBE8] bg-[#F9F7F5]'}`}>
-                <div className="p-5">
-                  <div className="flex items-center justify-between border-b border-[#EFEBE8] pb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EFEBE8] font-black text-[#8E7F74]">{room.room_number}</div>
-                      <div>
-                        <h3 className="text-lg font-bold">{room.tenant_name || '空房招租中'}</h3>
-                        {room.tenant_name && <p className="text-xs font-bold text-orange-500">月租 NT$ {room.rent_amount || 0}</p>}
-                      </div>
-                    </div>
-                    {room.tenant_name && (
-                      <button onClick={() => openModal(room)} className="text-xs font-bold text-gray-400 hover:text-[#8E7F74] flex items-center gap-1"><Edit size={12}/> 編輯</button>
-                    )}
-                  </div>
-                  {!room.tenant_name ? (
-                    <button onClick={() => openModal(room)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-white border border-[#D1C4BC] py-2.5 text-sm font-bold text-[#8E7F74]"><UserPlus size={16} /> 新增租客</button>
-                  ) : (
-                    <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] font-bold text-gray-500">
-                      <div className="flex items-center gap-1"><ShieldCheck size={14} className="text-green-500"/> 押金: {room.deposit || 0}</div>
-                      <div className="flex items-center gap-1"><BadgeDollarSign size={14} className="text-blue-500"/> 管理費: {room.management_fee || 0}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-xl font-bold">合約資訊 ({editingRoom?.room_number} 房)</h3>
-              <button onClick={closeModal} className="rounded-full bg-gray-100 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-[#8E7F74]">租客姓名</label>
-                <input type="text" value={formData.tenant_name} onChange={(e) => setFormData({...formData, tenant_name: e.target.value})} className="w-full rounded-xl border border-[#EFEBE8] bg-[#F9F7F5] p-3 font-bold" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-[#8E7F74]">每月租金</label>
-                  <input type="number" value={formData.rent_amount} onChange={(e) => setFormData({...formData, rent_amount: e.target.value})} className="w-full rounded-xl border border-[#EFEBE8] bg-[#F9F7F5] p-3 font-bold" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-[#8E7F74]">每月管理費</label>
-                  <input type="number" value={formData.management_fee} onChange={(e) => setFormData({...formData, management_fee: e.target.value})} className="w-full rounded-xl border border-[#EFEBE8] bg-[#F9F7F5] p-3 font-bold" />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-[#8E7F74]">合約押金</label>
-                <input type="number" value={formData.deposit} onChange={(e) => setFormData({...formData, deposit: e.target.value})} className="w-full rounded-xl border border-[#EFEBE8] bg-[#F9F7F5] p-3 font-bold" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-[#8E7F74]">聯絡電話</label>
-                <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border border-[#EFEBE8] bg-[#F9F7F5] p-3 font-bold" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-[#8E7F74]">合約到期日</label>
-                <input type="date" value={formData.contract_end} onChange={(e) => setFormData({...formData, contract_end: e.target.value})} className="w-full rounded-xl border border-[#EFEBE8] bg-[#F9F7F5] p-3 font-bold" />
-              </div>
-            </div>
-            <button onClick={handleSave} disabled={isSaving} className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#3E342E] py-4 font-bold text-white disabled:bg-gray-300">
-              {isSaving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} 儲存合約資訊
-            </button>
-          </div>
-        </div>
-      )}
-
-      {isAddRoomModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-[#3E342E]">建立新房間</h3>
-              <button onClick={() => setIsAddRoomModalOpen(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-bold text-[#8E7F74]">房號 <span className="text-red-400">*</span></label>
-                <input 
-                  type="text" 
-                  value={newRoomNumber}
-                  onChange={(e) => setNewRoomNumber(e.target.value)}
-                  className="w-full rounded-xl border border-[#EFEBE8] bg-[#F9F7F5] p-4 text-xl font-bold text-[#3E342E] outline-none"
-                  placeholder="例如：103"
-                />
-              </div>
-            </div>
-            <button 
-              onClick={handleAddRoom}
-              disabled={isAddingRoom || !newRoomNumber}
-              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#3E342E] py-4 font-bold text-white disabled:bg-gray-300"
-            >
-              {isAddingRoom ? <Loader2 size={20} className="animate-spin" /> : <Home size={20} />}
-              {isAddingRoom ? '建立中...' : '確認建立'}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+
+function FeeBox({ label, val, icon }: any) { return <div className="bg-[#F9F7F5] p-3 rounded-2xl text-center"><div className="flex items-center justify-center gap-1 text-[#8E7F74] mb-1">{icon} <span className="text-[9px] font-black">{label}</span></div><p className="text-xs font-black">${val.toLocaleString()}</p></div>; }
+function InputRow({ label, value, onChange }: any) { return <div className="space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">{label}</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#D1C7C0]">NT$</span><input type="number" value={value || ''} onChange={(e) => onChange(Number(e.target.value))} className="w-full h-12 bg-[#F9F7F5] rounded-xl pl-12 pr-4 text-sm font-bold outline-none" /></div></div>; }

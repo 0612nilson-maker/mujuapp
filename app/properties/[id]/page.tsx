@@ -1,64 +1,51 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, MapPin, Droplets, Users, FileText, Wrench, Loader2 } from 'lucide-react';
-// 🌟 這裡只需退三層：../../..
-import { supabase } from '../../../lib/supabase';
 
-export default function PropertyDetailPage() {
-  const params = useParams();
-  const propertyId = params.id as string;
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../../lib/supabase'; // 三層路徑
+import { ArrowLeft, Droplets, Users, FileText, Wrench, MapPin, Settings } from 'lucide-react';
+
+export default function PropertyDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
   const [property, setProperty] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (propertyId) fetchProperty();
-  }, [propertyId]);
-
-  const fetchProperty = async () => {
-    try {
-      const { data, error } = await supabase.from('properties').select('*').eq('id', propertyId).single(); 
-      if (error) throw error;
+    async function fetchProperty() {
+      const { data } = await supabase.from('properties').select('*').eq('id', params.id).single();
       if (data) setProperty(data);
-    } catch (error: any) {
-      console.error('❌ 讀取失敗:', error.message);
-    } finally {
-      setIsLoading(false);
     }
-  };
+    fetchProperty();
+  }, [params.id]);
 
-  if (isLoading) return <div className="flex min-h-screen items-center justify-center bg-[#F9F7F5]"><Loader2 className="animate-spin text-[#8E7F74]" /></div>;
+  const menus = [
+    { title: '水電抄表', icon: <Droplets className="w-6 h-6" />, path: `/properties/${params.id}/meter`, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { title: '租客管理', icon: <Users className="w-6 h-6" />, path: `/properties/${params.id}/tenants`, color: 'text-orange-500', bg: 'bg-orange-50' },
+    { title: '財務報表', icon: <FileText className="w-6 h-6" />, path: `/properties/${params.id}/finance`, color: 'text-green-500', bg: 'bg-green-50' },
+    { title: '報修管理', icon: <Wrench className="w-6 h-6" />, path: '#', color: 'text-red-400', bg: 'bg-red-50' }
+  ];
 
   return (
-    <div className="min-h-screen bg-[#F9F7F5] pb-24 text-[#3E342E]">
-      <div className="flex items-center justify-between bg-white p-5 shadow-sm">
-        <Link href="/properties" className="rounded-full p-2"><ArrowLeft size={24} color="#3E342E" /></Link>
-        <h1 className="text-lg font-bold text-[#8E7F74]">房產詳情</h1>
-        <div className="w-10"></div>
+    <div className="min-h-screen bg-[#F9F7F5] font-sans text-[#3E342E]">
+      <div className="px-6 py-4 flex items-center justify-between">
+        <button onClick={() => router.push('/properties')} className="p-2"><ArrowLeft className="w-6 h-6" /></button>
+        <h1 className="text-lg font-black text-[#8E7F74]">房產詳情</h1>
+        <button onClick={() => router.push(`/properties/${params.id}/settings`)} className="p-2"><Settings className="w-6 h-6 text-[#8E7F74]" /></button>
       </div>
-      <div className="p-6">
-        <div className="mb-8 rounded-3xl bg-[#B5A59B] p-6 shadow-lg text-white">
-          <h2 className="text-2xl font-bold">{property?.name || '未命名'}</h2>
-          <p className="mt-2 flex items-center gap-1 text-xs text-white/80"><MapPin size={14} /> {property?.address}</p>
+      <div className="px-6 space-y-6">
+        <div className="bg-[#B5A59B] p-8 rounded-[32px] text-white shadow-lg relative overflow-hidden">
+          <div className="relative z-10">
+            <h2 className="text-2xl font-black mb-1">{property?.name || '載入中...'}</h2>
+            <div className="flex items-center gap-1 opacity-80 text-sm"><MapPin className="w-3 h-3" /><p>{property?.address || '資產管理中心'}</p></div>
+          </div>
+          <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-white/10 rounded-full" />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <Link href={`/properties/${propertyId}/meter`} className="flex flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-3 rounded-2xl bg-blue-50 p-3"><Droplets size={28} className="text-blue-500" /></div>
-            <span className="font-bold">水電抄表</span>
-          </Link>
-          <Link href={`/properties/${propertyId}/tenants`} className="flex flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-3 rounded-2xl bg-orange-50 p-3"><Users size={28} className="text-orange-500" /></div>
-            <span className="font-bold">租客管理</span>
-          </Link>
-          <Link href={`/properties/${propertyId}/finance`} className="flex flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-3 rounded-2xl bg-green-50 p-3"><FileText size={28} className="text-green-500" /></div>
-            <span className="font-bold">財務報表</span>
-          </Link>
-          <div className="flex flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-sm opacity-50">
-            <div className="mb-3 rounded-2xl bg-red-50 p-3"><Wrench size={28} className="text-red-500" /></div>
-            <span className="font-bold">報修管理</span>
-          </div>
+          {menus.map((menu, i) => (
+            <div key={i} onClick={() => menu.path !== '#' && router.push(menu.path)} className="bg-white p-8 rounded-[32px] flex flex-col items-center justify-center gap-4 shadow-sm cursor-pointer border border-transparent hover:border-[#EFEBE8]">
+              <div className={`${menu.bg} ${menu.color} p-4 rounded-2xl`}>{menu.icon}</div>
+              <span className="font-black text-sm">{menu.title}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

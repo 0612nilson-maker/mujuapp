@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../../lib/supabase'; 
-import { ArrowLeft, FileText, User, Calendar, Plus, X, CheckCircle2, Home, FileSignature, FileEdit, Printer, UploadCloud, Zap, Camera, CreditCard, Trash2, Users, Edit3, Copy, PawPrint } from 'lucide-react';
+import { ArrowLeft, FileText, User, Calendar, Plus, X, CheckCircle2, Home, FileSignature, FileEdit, Printer, Zap, Camera, CreditCard, Trash2, Users, Edit3, Copy, PawPrint } from 'lucide-react';
 
 // ==========================================
 // 資料與邏輯預設值
@@ -41,11 +41,15 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
   const [viewingContract, setViewingContract] = useState<any | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // 用於控制手機版預覽縮放的狀態
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const [previewScale, setPreviewScale] = useState(1);
   const [previewHeight, setPreviewHeight] = useState<number | 'auto'>('auto');
+
+  const [propertyDefaults, setPropertyDefaults] = useState({
+    payment_method: '轉帳', bank_name: '', bank_account_name: '', bank_account: '',
+    landlord_name: '', landlord_id: '', landlord_company: '', landlord_address: '', landlord_license: '', original_owner: ''
+  });
 
   const [draft, setDraft] = useState({
     contract_type: 'general', room_number: '', property_address: '',
@@ -60,22 +64,45 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: cData } = await supabase.from('contracts').select('*').eq('property_id', params.id).order('created_at', { ascending: false });
-    const { data: rData } = await supabase.from('rooms').select('room_number, rent_amount, deposit').eq('property_id', params.id).order('room_number', { ascending: true });
-    if (cData) setContracts(cData);
-    if (rData) setAvailableRooms(rData);
-    setLoading(false);
+    try {
+      const { data: cData } = await supabase.from('contracts').select('*').eq('property_id', params.id).order('created_at', { ascending: false });
+      const { data: rData } = await supabase.from('rooms').select('room_number, rent_amount, deposit').eq('property_id', params.id).order('room_number', { ascending: true });
+      
+      if (cData) {
+        setContracts(cData);
+        if (cData.length > 0) {
+          const latest = cData[0];
+          const d = latest.details || {};
+          setPropertyDefaults({
+            payment_method: d.payment?.method || '轉帳',
+            bank_name: d.payment?.bank || '',
+            bank_account_name: d.payment?.account_name || '',
+            bank_account: d.payment?.account || '',
+            landlord_name: d.landlord?.name || latest.landlord_name || '',
+            landlord_id: d.landlord?.id || '',
+            landlord_company: d.landlord?.company || '',
+            landlord_address: d.landlord?.address || '',
+            landlord_license: d.landlord?.license || '',
+            original_owner: latest.original_owner || ''
+          });
+        }
+      }
+      if (rData) setAvailableRooms(rData);
+    } catch (error: any) {
+      console.error('資料讀取失敗:', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, [params.id]);
 
-  // ✅ 自動縮放引擎：讓 A4 尺寸完美塞進手機螢幕
   useEffect(() => {
     if (viewMode === 'preview' && printRef.current && previewContainerRef.current) {
       const updateLayout = () => {
         if (previewContainerRef.current && printRef.current) {
           const containerWidth = previewContainerRef.current.offsetWidth;
-          const targetWidth = 794; // 標準 A4 寬度對應的像素
+          const targetWidth = 794; 
           
           if (containerWidth < targetWidth && containerWidth > 0) {
             const scale = containerWidth / targetWidth;
@@ -214,7 +241,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
 
     setDraft({
       contract_type: contract.contract_type || 'general', room_number: contract.room_number || '', property_address: d.property_address || '',
-      landlord_name: d.landlord?.name || '', landlord_id: d.landlord?.id || '', landlord_company: d.landlord?.company || '', landlord_address: d.landlord?.address || '', landlord_license: d.landlord?.license || '',
+      landlord_name: d.landlord?.name || contract.landlord_name || '', landlord_id: d.landlord?.id || '', landlord_company: d.landlord?.company || '', landlord_address: d.landlord?.address || '', landlord_license: d.landlord?.license || '',
       tenants: loadedTenants, guarantors: d.guarantors || [], start_date: contract.start_date || '', end_date: contract.end_date || '', rent_amount: contract.rent_amount || 0, deposit_amount: contract.deposit_amount || 0,
       rent_due_day: d.rent_due_day || '', payment_method: d.payment?.method || '轉帳', bank_name: d.payment?.bank || '', bank_account_name: d.payment?.account_name || '', bank_account: d.payment?.account || '',
       fees: d.fees || JSON.parse(JSON.stringify(defaultFees)), equipment: d.equipment || JSON.parse(JSON.stringify(defaultEquipment)),
@@ -230,7 +257,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     setEditingId(null); 
     setDraft({
       contract_type: contract.contract_type || 'general', room_number: '', property_address: '',
-      landlord_name: d.landlord?.name || '', landlord_id: d.landlord?.id || '', landlord_company: d.landlord?.company || '', landlord_address: d.landlord?.address || '', landlord_license: d.landlord?.license || '',
+      landlord_name: d.landlord?.name || contract.landlord_name || '', landlord_id: d.landlord?.id || '', landlord_company: d.landlord?.company || '', landlord_address: d.landlord?.address || '', landlord_license: d.landlord?.license || '',
       tenants: [newPerson()], guarantors: [], start_date: '', end_date: '', rent_amount: contract.rent_amount || 0, deposit_amount: contract.deposit_amount || 0, rent_due_day: d.rent_due_day || '',
       payment_method: d.payment?.method || '轉帳', bank_name: d.payment?.bank || '', bank_account_name: d.payment?.account_name || '', bank_account: d.payment?.account || '',
       fees: d.fees || JSON.parse(JSON.stringify(defaultFees)), equipment: d.equipment || JSON.parse(JSON.stringify(defaultEquipment)), 
@@ -241,6 +268,9 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     alert('已為您複製合約模板！請選擇新房號或填寫新標的地址。');
   };
 
+  // ==========================================
+  // ✅ 核心防呆：新增歷史合約時，不再覆蓋目前最新房客！
+  // ==========================================
   const handleGenerateContract = async () => {
     if (draft.contract_type !== 'master' && !draft.room_number) return alert('請選擇房號');
     if (draft.contract_type === 'master' && !draft.property_address) return alert('請填寫包租地址');
@@ -252,7 +282,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
       tenant_name: draft.tenants[0].name, tenant_id_number: draft.tenants[0].id_number, tenant_phone: draft.tenants[0].phone,
       start_date: draft.start_date, end_date: draft.end_date, rent_amount: draft.rent_amount, deposit_amount: draft.deposit_amount,
       special_terms: draft.special_terms, allow_pets: draft.allow_pets, pet_details: draft.allow_pets ? `種類:${draft.pet_type} / 數量:${draft.pet_count} / 名字:${draft.pet_name}` : '',
-      original_owner: draft.original_owner,
+      original_owner: draft.original_owner, landlord_name: draft.landlord_name,
       details: {
         property_address: draft.property_address,
         rent_due_day: draft.rent_due_day, 
@@ -263,25 +293,47 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     };
     
     const { error } = editingId ? await supabase.from('contracts').update(payload).eq('id', editingId) : await supabase.from('contracts').insert([payload]);
+    
+    // 智慧防呆判斷：這是一份「過期舊合約」，還是一份「目前有效」的合約？
+    const isPastContract = new Date(draft.end_date) < new Date();
+
     if (!error && draft.contract_type !== 'master') {
-      await supabase.from('rooms').update({ status: 'occupied', tenant_name: draft.tenants[0].name, phone: draft.tenants[0].phone, contract_start: draft.start_date, contract_end: draft.end_date }).eq('property_id', params.id).eq('room_number', draft.room_number);
+      if (!isPastContract) {
+        // 只有這份合約是現在有效時，才去把該房間狀態改為「已出租」並掛上這位房客的名字
+        await supabase.from('rooms').update({ 
+          status: 'occupied', 
+          tenant_name: draft.tenants[0].name, 
+          phone: draft.tenants[0].phone, 
+          contract_start: draft.start_date, 
+          contract_end: draft.end_date 
+        }).eq('property_id', params.id).eq('room_number', draft.room_number);
+      }
     }
+    
     setSaving(false); setEditingId(null); setViewMode('hub'); fetchData();
   };
 
-  const handleResetDraft = () => {
+  const handleResetDraft = (type = 'general') => {
     setEditingId(null);
     setDraft({
-      contract_type: 'general', room_number: '', property_address: '', landlord_name: '', landlord_id: '', landlord_company: '', landlord_address: '', landlord_license: '',
+      contract_type: type, room_number: '', property_address: '', 
+      landlord_name: propertyDefaults.landlord_name, 
+      landlord_id: propertyDefaults.landlord_id, 
+      landlord_company: propertyDefaults.landlord_company, 
+      landlord_address: propertyDefaults.landlord_address, 
+      landlord_license: propertyDefaults.landlord_license, 
+      original_owner: propertyDefaults.original_owner,
       tenants: [newPerson()], guarantors: [], start_date: '', end_date: '', rent_amount: 0, deposit_amount: 0, rent_due_day: '',
-      payment_method: '轉帳', bank_name: '', bank_account_name: '', bank_account: '',
+      payment_method: propertyDefaults.payment_method || '轉帳', 
+      bank_name: propertyDefaults.bank_name, 
+      bank_account_name: propertyDefaults.bank_account_name, 
+      bank_account: propertyDefaults.bank_account,
       fees: JSON.parse(JSON.stringify(defaultFees)), equipment: JSON.parse(JSON.stringify(defaultEquipment)),
       special_terms: '1. 室內全面禁菸。\n2. 禁止擅自變更房屋結構。', allow_pets: false, pet_type: '', pet_count: 1, pet_name: '',
-      early_termination_allowed: true, free_rent_days: 30, renovation_cost: 0, property_photos: Array(15).fill(''), original_owner: ''
+      early_termination_allowed: true, free_rent_days: 30, renovation_cost: 0, property_photos: Array(15).fill('')
     });
   }
 
-  // ✅ 修復：之前遺漏的 const printContent = printRef.current;
   const handlePrint = () => {
     const printContent = printRef.current;
     if (printContent) {
@@ -298,7 +350,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
   return (
     <div className="min-h-screen bg-[#F9F7F5] font-sans text-[#3E342E]">
       <div className="px-6 py-6 flex items-center justify-between sticky top-0 bg-[#F9F7F5]/90 backdrop-blur z-20 border-b border-[#EFEBE8]">
-        <button onClick={() => { if (viewMode !== 'hub') { setViewMode('hub'); handleResetDraft(); } else router.back(); }} className="p-2 active:scale-90 transition-all"><ArrowLeft className="w-6 h-6 text-[#3E342E]" /></button>
+        <button onClick={() => { if (viewMode !== 'hub') { setViewMode('hub'); handleResetDraft('general'); } else router.back(); }} className="p-2 active:scale-90 transition-all"><ArrowLeft className="w-6 h-6 text-[#3E342E]" /></button>
         <div className="text-center"><h1 className="text-xl font-black text-[#3E342E] tracking-widest">契約管理中心</h1></div>
         <div className="w-10"></div>
       </div>
@@ -309,10 +361,10 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
         {viewMode === 'hub' && (
           <div className="space-y-8 animate-in fade-in">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <ContractTypeCard icon={<Home className="w-6 h-6 text-orange-500" />} title="包租契約書" onClick={() => { handleResetDraft(); setDraft(prev => ({...prev, contract_type: 'master'})); setViewMode('drafting'); }} />
-              <ContractTypeCard icon={<FileText className="w-6 h-6 text-purple-500" />} title="轉租同意書" onClick={() => { handleResetDraft(); setDraft(prev => ({...prev, contract_type: 'consent'})); setViewMode('drafting'); }} />
-              <ContractTypeCard icon={<FileEdit className="w-6 h-6 text-red-400" />} title="轉租契約書" onClick={() => { handleResetDraft(); setDraft(prev => ({...prev, contract_type: 'sublease'})); setViewMode('drafting'); }} />
-              <ContractTypeCard icon={<User className="w-6 h-6 text-[#3E342E]" />} title="一般出租契約" onClick={() => { handleResetDraft(); setDraft(prev => ({...prev, contract_type: 'general'})); setViewMode('drafting'); }} />
+              <ContractTypeCard icon={<Home className="w-6 h-6 text-orange-500" />} title="包租契約書" onClick={() => { handleResetDraft('master'); setViewMode('drafting'); }} />
+              <ContractTypeCard icon={<FileText className="w-6 h-6 text-purple-500" />} title="轉租同意書" onClick={() => { handleResetDraft('consent'); setViewMode('drafting'); }} />
+              <ContractTypeCard icon={<FileEdit className="w-6 h-6 text-red-400" />} title="轉租契約書" onClick={() => { handleResetDraft('sublease'); setViewMode('drafting'); }} />
+              <ContractTypeCard icon={<User className="w-6 h-6 text-[#3E342E]" />} title="一般出租契約" onClick={() => { handleResetDraft('general'); setViewMode('drafting'); }} />
             </div>
 
             <div>
@@ -399,7 +451,8 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                   </div>
                 )}
                 <div className="col-span-1 md:col-span-2 pt-4 border-t border-[#D1C7C0]">
-                  <h4 className="font-bold text-sm text-[#3E342E] mb-4">出租方資訊 (甲方)</h4>
+                  <h4 className="font-bold text-sm text-[#3E342E] mb-1 flex items-center gap-2">出租方資訊 (甲方)</h4>
+                  <p className="text-[10px] text-[#8E7F74] mb-4">💡 系統已自動帶入此標的上次設定的房東資料</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="col-span-1"><InputText label="出租方名稱/姓名" value={draft.landlord_name} onChange={(v:any) => setDraft({...draft, landlord_name: v})} /></div>
                     <div className="col-span-1"><InputText label="身分證/負責人" value={draft.landlord_id} onChange={(v:any) => setDraft({...draft, landlord_id: v})} /></div>
@@ -482,7 +535,10 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                   )}
 
                   <div className="col-span-1 md:col-span-2 bg-[#F9F7F5] p-5 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-[#EFEBE8]">
-                    <div className="md:col-span-3"><h4 className="font-bold text-sm text-[#3E342E] mb-2 flex items-center gap-2"><CreditCard className="w-4 h-4"/> 租金支付帳戶</h4></div>
+                    <div className="md:col-span-3">
+                      <h4 className="font-bold text-sm text-[#3E342E] mb-1 flex items-center gap-2"><CreditCard className="w-4 h-4"/> 租金支付帳戶</h4>
+                      <p className="text-[10px] text-[#8E7F74]">💡 系統已自動為您帶入此標的專屬的預設收款帳戶</p>
+                    </div>
                     <div className="col-span-1 space-y-1"><label className="text-[10px] font-black text-[#8E7F74] block">支付方式</label>
                       <select className="w-full h-12 bg-white rounded-xl px-4 text-sm font-bold text-[#3E342E] border border-[#EFEBE8] outline-none box-border" value={draft.payment_method} onChange={(e) => setDraft({...draft, payment_method: e.target.value})}>
                         <option value="轉帳">匯款/轉帳</option><option value="現金">現金</option>
@@ -664,7 +720,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
               </button>
             </div>
 
-            {/* ✅ 自適應縮放引擎：透過 JavaScript 精算 A4 比例縮小 */}
             <div 
               ref={previewContainerRef} 
               className="bg-[#EFEBE8] md:bg-gray-200 p-0 md:p-8 rounded-none md:rounded-[12px] shadow-none md:shadow-2xl w-full overflow-hidden print:p-0 print:bg-transparent" 
@@ -677,7 +732,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                   printColorAdjust: 'exact',
                   transform: previewScale < 1 ? `scale(${previewScale})` : 'none',
                   transformOrigin: 'top left',
-                  width: '794px' // 強制 A4 寬度，再由外層引擎等比縮小
+                  width: '794px' 
                 }} 
                 className="bg-white text-[#3E342E] mx-auto print:transform-none print:m-0 print:p-0 print:w-[210mm] shadow-md print:shadow-none box-border"
               >
@@ -693,7 +748,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
 }
 
 // ==========================================
-// 核心：智慧路由 PDF 渲染引擎 (已拔除所有 md: 響應式 class)
+// 核心：智慧路由 PDF 渲染引擎
 // ==========================================
 function FullLeaseDocument({ contract }: { contract: any }) {
   if (contract.contract_type === 'consent') return <ConsentDocument contract={contract} />;
@@ -820,7 +875,7 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
         <div className="break-inside-avoid mt-16 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
           <h3 className="text-lg font-black border-b-2 border-[#3E342E] pb-2 mb-8 tracking-widest text-center">立契約書人簽章</h3>
           <div className="flex flex-row gap-x-12 gap-y-12 justify-center">
-            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方/屋主) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
             <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方/包租業) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
           </div>
         </div>
@@ -1045,7 +1100,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2">七、寵物飼養與違約責任</h3>
           <div className="pl-4 space-y-2 text-sm text-justify">
             <p>本租賃標的原則上禁止飼養寵物（包含但不限於狗、貓、爬蟲類等），除經出租人書面同意並簽署寵物條款者不在此限。針對寵物飼養行為，雙方同意依下列規範辦理：</p>
-            <p><strong>1. 未經同意擅自飼養（偷養）之罰則：</strong> 若乙方未經書面同意，擅自攜帶寵物進入租賃標的飼養（包含暫放），視為重大違約：</p>
+            <p><strong>1. 未經同意擅自飼養（偷養）之罰則：</strong> 若乙方未經書面同意，擅自攜帶寵物進入飼養（包含暫放），視為重大違約：</p>
             <ul className="list-disc pl-8 space-y-0.5">
               <li><strong>懲罰性違約金：</strong> 乙方應支付相當於一個月租金之懲罰性違約金。</li>
               <li><strong>限期遷離：</strong> 乙方應於甲方發現並通知後 3 日內 將寵物遷離。</li>
@@ -1055,7 +1110,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
             <p><strong>2. 經同意飼養但造成滋擾（吵鬧/異味）之罰則：</strong> 若該寵物之行為干擾鄰居安寧或公共衛生，遭投訴達 2 次（含）以上者：</p>
             <ul className="list-disc pl-8 space-y-0.5">
               <li><strong>撤銷飼養許可：</strong> 甲方有權撤銷許可，乙方應於 7 日內 將寵物遷離。</li>
-              <li><strong>損害賠償：</strong> 若導致甲方遭管委會裁罰，乙方應負擔全額罰款及賠償。</li>
+              <li><strong>損害賠償：</strong> 若導致甲方遭管委會裁罰，乙方應負擔全額罰款。</li>
               <li><strong>終止契約：</strong> 若未將寵物遷離或再度私自带回，甲方得終止租賃契約。</li>
             </ul>
           </div>

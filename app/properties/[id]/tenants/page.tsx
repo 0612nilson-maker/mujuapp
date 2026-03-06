@@ -3,36 +3,53 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../../lib/supabase';
-import { ArrowLeft, Plus, Phone, Calendar, Info, LogOut, Home, CheckCircle2, Zap, Search, UserPlus, CreditCard, User, X, PawPrint, Calculator, AlertTriangle, FileText, FileSignature } from 'lucide-react';
+import { ArrowLeft, Plus, Phone, Calendar, Info, LogOut, Home, CheckCircle2, Zap, Search, User, X, Calculator, AlertTriangle, FileText, FileSignature, History } from 'lucide-react';
 
 export default function TenantsPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [rooms, setRooms] = useState<any[]>([]);
   const [roomContracts, setRoomContracts] = useState<string[]>([]);
+  const [pastTenants, setPastTenants] = useState<any[]>([]); // ✅ 新增：歷史房客名單
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [editingRoom, setEditingRoom] = useState<any | null>(null);
-
   const [checkoutRoom, setCheckoutRoom] = useState<any | null>(null);
   const [checkoutContract, setCheckoutContract] = useState<any | null>(null);
   const [checkoutDate, setCheckoutDate] = useState('');
   const [deductionAmount, setDeductionAmount] = useState<number>(0);
   const [deductionReason, setDeductionReason] = useState('');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  
+  const [showArchive, setShowArchive] = useState(false); // ✅ 新增：控制歷史房客彈窗
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const [roomsRes, contractsRes] = await Promise.all([
         supabase.from('rooms').select('*').eq('property_id', params.id).order('room_number', { ascending: true }),
-        supabase.from('contracts').select('room_number').eq('property_id', params.id)
+        supabase.from('contracts').select('*').eq('property_id', params.id).order('created_at', { ascending: false })
       ]);
 
       if (roomsRes.error) throw roomsRes.error;
       
-      setRooms(roomsRes.data || []);
+      const fetchedRooms = roomsRes.data || [];
+      setRooms(fetchedRooms);
+      
+      // 判斷哪些房間已經有合約
       setRoomContracts(contractsRes.data?.map(c => c.room_number) || []);
+
+      // ✅ 智慧比對引擎：找出「曾經簽約過，但現在不在房間裡」的歷史房客
+      if (contractsRes.data) {
+        const activeSignatures = fetchedRooms.map(r => `${r.room_number}-${r.tenant_name}`);
+        const archived = contractsRes.data.filter(c => 
+          c.contract_type !== 'master' && 
+          c.contract_type !== 'consent' && 
+          !activeSignatures.includes(`${c.room_number}-${c.tenant_name}`)
+        );
+        setPastTenants(archived);
+      }
+
     } catch (error) { 
       console.error('Error fetching data:', error); 
     } finally { 
@@ -134,13 +151,24 @@ export default function TenantsPage({ params }: { params: { id: string } }) {
       </div>
 
       <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
-        <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#D1C7C0] group-focus-within:text-[#3E342E] transition-colors" />
-          <input 
-            type="text" placeholder="搜尋房號、租客姓名..." 
-            className="w-full h-14 bg-white border border-[#EFEBE8] rounded-[20px] pl-12 pr-6 text-sm font-bold shadow-sm outline-none focus:border-[#3E342E] transition-all"
-            value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        
+        {/* ✅ 搜尋列與歷史房客按鈕 */}
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+          <div className="relative group w-full md:flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#D1C7C0] group-focus-within:text-[#3E342E] transition-colors" />
+            <input 
+              type="text" placeholder="搜尋房號、現任租客姓名..." 
+              className="w-full h-14 bg-white border border-[#EFEBE8] rounded-[20px] pl-12 pr-6 text-sm font-bold shadow-sm outline-none focus:border-[#3E342E] transition-all"
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => setShowArchive(true)} 
+            className="w-full md:w-auto h-14 bg-[#EFEBE8] text-[#3E342E] px-6 rounded-[20px] text-sm font-black flex items-center justify-center gap-2 hover:bg-[#D1C7C0] transition-colors shadow-sm"
+          >
+            <History className="w-5 h-5"/> 歷史房客檔案庫
+            {pastTenants.length > 0 && <span className="bg-[#3E342E] text-white text-[10px] px-2 py-0.5 rounded-full ml-1">{pastTenants.length}</span>}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -159,7 +187,7 @@ export default function TenantsPage({ params }: { params: { id: string } }) {
                     <div>
                       <h2 className={`text-2xl font-black ${isOccupied ? 'text-[#3E342E]' : 'text-[#8E7F74]'}`}>{room.tenant_name || '待租中'}</h2>
                       <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter mt-1 inline-block ${isOccupied ? 'bg-[#EAF3EB] text-[#2E7D32]' : 'bg-[#F5F5F5] text-[#D1C7C0]'}`}>
-                        {isOccupied ? '已出租 Occupied' : '待租中 Vacant'}
+                        {isOccupied ? '已出租 OCCUPIED' : '待租中 VACANT'}
                       </span>
                     </div>
                   </div>
@@ -173,7 +201,7 @@ export default function TenantsPage({ params }: { params: { id: string } }) {
                   )}
                   {hasContract ? (
                     <button onClick={() => router.push(`/properties/${params.id}/contracts`)} className="bg-[#EFEBE8] text-[#3E342E] px-4 py-2 rounded-2xl text-xs font-black hover:bg-[#D1C7C0] transition-colors flex items-center gap-1">
-                      <FileText className="w-3 h-3"/> 查看合約
+                      <FileText className="w-3 h-3"/> 檢視合約
                     </button>
                   ) : (
                     <button onClick={() => router.push(`/properties/${params.id}/contracts`)} className={`px-4 py-2 rounded-2xl text-xs font-black flex items-center gap-1 transition-colors ${isOccupied ? 'bg-[#3E342E] text-white hover:bg-[#3E342E]/80 shadow-sm' : 'bg-[#F5F5F5] text-[#8E7F74] hover:bg-[#EFEBE8]'}`}>
@@ -194,7 +222,6 @@ export default function TenantsPage({ params }: { params: { id: string } }) {
                   </div>
                 )}
 
-                {/* ✅ 視覺降級：待租中顯示為灰色虛線框 */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
                   <div className={`p-4 rounded-[24px] text-center ${isOccupied ? 'bg-[#F9F7F5]' : 'bg-[#F5F5F5] border border-dashed border-[#D1C7C0]'}`}>
                     <div className={`flex items-center justify-center gap-1 text-[10px] mb-1 ${isOccupied ? 'text-[#8E7F74]' : 'text-[#D1C7C0]'}`}>
@@ -225,6 +252,9 @@ export default function TenantsPage({ params }: { params: { id: string } }) {
                        <Phone className="w-3 h-3"/> {room.phone}
                     </div>
                   )}
+                  <div className="bg-[#F5F5F5] text-[#3E342E] px-4 py-2 rounded-full text-xs font-black flex items-center gap-2">
+                     <Info className="w-3 h-3"/> 含水費、網路
+                  </div>
                 </div>
 
               </div>
@@ -232,6 +262,57 @@ export default function TenantsPage({ params }: { params: { id: string } }) {
           })}
         </div>
       </div>
+
+      {/* ========================================== */}
+      {/* 歷史房客檔案庫彈窗 (Archive Modal) */}
+      {/* ========================================== */}
+      {showArchive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3E342E]/70 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-[32px] w-full max-w-3xl p-6 md:p-8 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <button onClick={() => setShowArchive(false)} className="absolute top-6 right-6 text-[#8E7F74] hover:text-[#3E342E] bg-[#F9F7F5] p-2 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+            
+            <div className="flex items-center gap-3 mb-6 border-b border-[#EFEBE8] pb-6 shrink-0">
+              <div className="w-12 h-12 bg-[#EFEBE8] rounded-2xl flex items-center justify-center text-[#3E342E]"><History className="w-6 h-6"/></div>
+              <div>
+                <h2 className="text-2xl font-black text-[#3E342E]">歷史房客檔案庫</h2>
+                <p className="text-xs font-bold text-[#8E7F74] mt-1">此處封存所有已退租的房客與合約紀錄</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+              {pastTenants.length === 0 ? (
+                <div className="text-center py-20 text-[#8E7F74] font-bold">目前尚無任何歷史退租紀錄。</div>
+              ) : (
+                pastTenants.map((tenant, idx) => (
+                  <div key={idx} className="bg-[#F9F7F5] border border-[#EFEBE8] rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-md transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center font-black text-lg text-[#3E342E] shadow-sm border border-[#EFEBE8] shrink-0">
+                        {tenant.room_number}
+                      </div>
+                      <div>
+                        <h3 className="font-black text-lg text-[#3E342E] flex items-center gap-2">
+                          {tenant.tenant_name} 
+                          <span className="text-[10px] bg-[#EFEBE8] text-[#8E7F74] px-2 py-0.5 rounded-md uppercase tracking-widest">已退租</span>
+                        </h3>
+                        <div className="text-xs font-bold text-[#8E7F74] mt-1 flex flex-wrap items-center gap-3">
+                          <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {tenant.start_date} ~ {tenant.end_date}</span>
+                          <span className="flex items-center gap-1"><Phone className="w-3 h-3"/> {tenant.tenant_phone || '無資料'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => { setShowArchive(false); router.push(`/properties/${params.id}/contracts`); }} 
+                      className="w-full md:w-auto bg-white border-2 border-[#D1C7C0] text-[#8E7F74] px-4 py-2.5 rounded-xl text-xs font-black hover:border-[#3E342E] hover:text-[#3E342E] transition-all flex items-center justify-center gap-2"
+                    >
+                      <FileText className="w-4 h-4"/> 調閱封存合約
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================== */}
       {/* 編輯房間彈窗 (Modal) */}
@@ -268,19 +349,19 @@ export default function TenantsPage({ params }: { params: { id: string } }) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-[#8E7F74]">月租金</label>
-                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.rent_amount || ''} onChange={(e) => setEditingRoom({...editingRoom, rent_amount: Number(e.target.value)})} />
+                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.rent_amount || ''} onChange={(e) => setEditingRoom({...editingRoom, rent_amount: e.target.value})} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-[#8E7F74]">押金</label>
-                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.deposit || ''} onChange={(e) => setEditingRoom({...editingRoom, deposit: Number(e.target.value)})} />
+                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.deposit || ''} onChange={(e) => setEditingRoom({...editingRoom, deposit: e.target.value})} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-[#8E7F74]">管理費</label>
-                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.management_fee || ''} onChange={(e) => setEditingRoom({...editingRoom, management_fee: Number(e.target.value)})} placeholder="0" />
+                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.management_fee || ''} onChange={(e) => setEditingRoom({...editingRoom, management_fee: e.target.value})} placeholder="0" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-[#8E7F74]">空間費</label>
-                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.space_fee || ''} onChange={(e) => setEditingRoom({...editingRoom, space_fee: Number(e.target.value)})} placeholder="0" />
+                  <input type="number" className="w-full h-12 bg-[#F9F7F5] border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none focus:border-[#3E342E]" value={editingRoom.space_fee || ''} onChange={(e) => setEditingRoom({...editingRoom, space_fee: e.target.value})} placeholder="0" />
                 </div>
               </div>
             </div>

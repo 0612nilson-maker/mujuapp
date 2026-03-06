@@ -45,7 +45,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
   const [draft, setDraft] = useState({
     contract_type: 'general',
     room_number: '',
-    property_address: '', // ✅ 新增：包租專用標的地址
+    property_address: '', 
     landlord_name: '', landlord_id: '', landlord_company: '', landlord_address: '', landlord_license: '', 
     original_owner: '', 
     tenants: [newPerson()],
@@ -58,6 +58,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     allow_pets: false, pet_type: '', pet_count: 1, pet_name: '',
     early_termination_allowed: true,
     free_rent_days: 30,
+    renovation_cost: 0,
     property_photos: Array(15).fill('')
   });
 
@@ -78,17 +79,20 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     setDraft({ ...draft, room_number, rent_amount: room?.rent_amount || 0, deposit_amount: room?.deposit || 0 });
   };
 
+  // ✅ 智慧一鍵帶入：根據不同合約類型給予不同資料
   const handleFillDummyData = () => {
     const defaultRoom = availableRooms.length > 0 ? availableRooms[0].room_number : '101';
+    const isMasterOrSub = draft.contract_type === 'master' || draft.contract_type === 'sublease';
+
     setDraft({
       ...draft,
-      room_number: defaultRoom,
-      property_address: '台中市北屯區台灣大道三段99號(整層)', // 包租專用測試地址
-      landlord_name: '王金主',
-      landlord_id: 'L123456789',
-      landlord_company: '90123456', 
+      room_number: draft.contract_type === 'master' ? '' : defaultRoom,
+      property_address: draft.contract_type === 'master' ? '台中市西屯區文心路三段99號(整層)' : '',
+      landlord_name: isMasterOrSub ? '好室多物管顧問' : '王金主',
+      landlord_id: isMasterOrSub ? '90123456' : 'L123456789',
+      landlord_company: '好室多物管顧問有限公司', 
       landlord_address: '台中市北屯區台灣大道三段99號',
-      landlord_license: '中市租登字第11200001號',
+      landlord_license: isMasterOrSub ? '中市租登字第11200001號' : '',
       original_owner: '張原屋',
       tenants: [
         { name: '陳小美', id_number: 'B222333444', phone: '0912-345-678', address: '台北市大安區忠孝東路四段1號', id_front: '', id_back: '' },
@@ -97,12 +101,12 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
         { name: '陳大山', id_number: 'D333444555', phone: '0955-111-222', address: '新北市板橋區復興路12號', id_front: '', id_back: '' }
       ],
       start_date: '2024-06-01',
-      end_date: '2029-05-31', 
+      end_date: draft.contract_type === 'master' ? '2029-05-31' : '2025-05-31', 
       rent_amount: 18500,
       deposit_amount: 37000,
       payment_method: '轉帳',
       bank_name: '國泰世華銀行 (013)',
-      bank_account_name: '王金主',
+      bank_account_name: isMasterOrSub ? '好室多物管顧問' : '王金主',
       bank_account: '013-1234567890',
       allow_pets: true,
       pet_type: '橘貓',
@@ -110,9 +114,10 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
       pet_name: '胖橘',
       early_termination_allowed: true,
       free_rent_days: 30,
+      renovation_cost: 350000,
       special_terms: '1. 室內全面禁菸。\n2. 禁止擅自變更房屋結構。\n3. 每月按時繳租可折抵100元。'
     });
-    alert('✅ 測試資料已秒速帶入！');
+    alert('✅ 測試資料已秒速帶入！您可以直接預覽或儲存了。');
   };
 
   const handlePersonChange = (type: 'tenants' | 'guarantors', index: number, field: string, value: string) => {
@@ -210,6 +215,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
       pet_type: p_type, pet_count: p_count, pet_name: p_name,
       early_termination_allowed: d.early_termination_allowed ?? true,
       free_rent_days: d.free_rent_days || 30,
+      renovation_cost: d.renovation_cost || 0,
       property_photos: d.images?.property_photos || Array(15).fill(''), original_owner: contract.original_owner || ''
     });
     setViewMode('drafting');
@@ -229,6 +235,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
       pet_type: '', pet_count: 1, pet_name: '', 
       early_termination_allowed: d.early_termination_allowed ?? true,
       free_rent_days: d.free_rent_days || 30,
+      renovation_cost: d.renovation_cost || 0,
       property_photos: Array(15).fill(''), original_owner: contract.original_owner || ''
     });
     setViewMode('drafting');
@@ -245,7 +252,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
       const payload = {
         property_id: params.id,
         contract_type: draft.contract_type,
-        room_number: draft.contract_type === 'master' ? '包租全戶' : draft.room_number, // 包租強制設為包租全戶
+        room_number: draft.contract_type === 'master' ? '包租全戶' : draft.room_number,
         tenant_name: draft.tenants[0].name,
         tenant_id_number: draft.tenants[0].id_number,
         tenant_phone: draft.tenants[0].phone,
@@ -265,7 +272,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
           payment: { method: draft.payment_method, bank: draft.bank_name, account_name: draft.bank_account_name, account: draft.bank_account },
           fees: draft.fees, equipment: draft.equipment, images: { property_photos: draft.property_photos },
           early_termination_allowed: draft.early_termination_allowed,
-          free_rent_days: draft.free_rent_days
+          free_rent_days: draft.free_rent_days, renovation_cost: draft.renovation_cost
         }
       };
 
@@ -299,7 +306,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
       payment_method: '轉帳', bank_name: '', bank_account_name: '', bank_account: '',
       fees: JSON.parse(JSON.stringify(defaultFees)), equipment: JSON.parse(JSON.stringify(defaultEquipment)),
       special_terms: '1. 室內全面禁菸。\n2. 禁止擅自變更房屋結構。', allow_pets: false, pet_type: '', pet_count: 1, pet_name: '',
-      early_termination_allowed: true, free_rent_days: 30, property_photos: Array(15).fill(''), original_owner: ''
+      early_termination_allowed: true, free_rent_days: 30, renovation_cost: 0, property_photos: Array(15).fill(''), original_owner: ''
     });
   }
 
@@ -381,7 +388,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
 
         {/* ================= 表單擬定/編輯模式 ================= */}
         {viewMode === 'drafting' && (
-          <div className="bg-white rounded-[32px] p-6 md:p-10 shadow-xl border border-[#EFEBE8] animate-in slide-in-from-right-8 max-w-5xl mx-auto space-y-10 relative">
+          <div className="bg-white rounded-[32px] p-6 md:p-10 shadow-xl border border-[#EFEBE8] space-y-10 relative max-w-5xl mx-auto">
             
             <div className="absolute top-6 right-6 md:top-10 md:right-10">
                <button type="button" onClick={handleFillDummyData} className="flex items-center gap-2 bg-[#EFEBE8] text-[#3E342E] hover:bg-[#D1C7C0] px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm">
@@ -403,47 +410,51 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
             <section className="space-y-4">
               <SectionTitle title="一、基本資料與對象" />
               
-              <div className="bg-[#F9F7F5] p-5 rounded-2xl space-y-4 border border-[#EFEBE8]">
-                {/* ✅ 包租契約改用文字輸入標的地址，不選房號 */}
+              <div className="bg-[#F9F7F5] p-5 md:p-6 rounded-2xl border border-[#EFEBE8] grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* ✅ 修復排版：保證每一個 InputText 在 Grid 中都能完整延伸 */}
                 {draft.contract_type === 'master' ? (
-                  <div className="space-y-1 max-w-xl">
-                    <label className="text-[10px] font-black text-[#8E7F74]">租賃標的地址 (包租標的) *</label>
+                  <div className="col-span-1 md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-black text-[#8E7F74]">包租標的地址 (整棟/整層) *</label>
                     <input type="text" className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none" value={draft.property_address} onChange={(e) => setDraft({...draft, property_address: e.target.value})} placeholder="例如：台中市西屯區文心路三段99號(全棟)" />
                   </div>
                 ) : (
-                  <div className="space-y-1 max-w-md">
+                  <div className="col-span-1 space-y-1">
                     <label className="text-[10px] font-black text-[#8E7F74]">選擇合約綁定房號 *</label>
                     <select className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold text-[#3E342E] outline-none" value={draft.room_number} onChange={(e) => handleRoomSelect(e.target.value)}>
-                      <option value="" disabled>請選擇房號</option>{availableRooms.map(r => <option key={r.room_number} value={r.room_number}>{r.room_number}</option>)}
+                      <option value="" disabled>請選擇</option>{availableRooms.map(r => <option key={r.room_number} value={r.room_number}>{r.room_number}</option>)}
                     </select>
                   </div>
                 )}
                 
                 {(draft.contract_type === 'sublease' || draft.contract_type === 'consent' || draft.contract_type === 'master') && (
-                  <div className="max-w-md">
-                    <InputText label="原所有權人(原屋主)姓名" value={draft.original_owner} onChange={(v) => setDraft({...draft, original_owner: v})} />
+                  <div className="col-span-1">
+                    <InputText label="原所有權人(原屋主)姓名" value={draft.original_owner} onChange={(v:any) => setDraft({...draft, original_owner: v})} />
                   </div>
                 )}
-              </div>
-
-              <div className="bg-[#F9F7F5] p-5 rounded-2xl space-y-4 border border-[#EFEBE8]">
-                <h4 className="font-bold text-sm text-[#3E342E] border-b border-[#D1C7C0] pb-2">出租方資訊 (甲方)</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <InputText label="出租方名稱/姓名" value={draft.landlord_name} onChange={(v) => setDraft({...draft, landlord_name: v})} />
-                  <InputText label="身分證/負責人" value={draft.landlord_id} onChange={(v) => setDraft({...draft, landlord_id: v})} />
-                  {draft.contract_type !== 'general' && (
-                    <>
-                      <InputText label="統一編號" value={draft.landlord_company} onChange={(v) => setDraft({...draft, landlord_company: v})} />
-                      <InputText label="租賃住宅服務業登記證字號" value={draft.landlord_license} onChange={(v) => setDraft({...draft, landlord_license: v})} />
-                    </>
-                  )}
-                  <div className="md:col-span-2">
-                    <InputText label="聯絡地址" value={draft.landlord_address} onChange={(v) => setDraft({...draft, landlord_address: v})} />
+                
+                {/* 出租方資訊 */}
+                <div className="col-span-1 md:col-span-2 pt-4 border-t border-[#D1C7C0]">
+                  <h4 className="font-bold text-sm text-[#3E342E] mb-4">出租方資訊 (甲方)</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="col-span-1"><InputText label="出租方名稱/姓名" value={draft.landlord_name} onChange={(v:any) => setDraft({...draft, landlord_name: v})} /></div>
+                    <div className="col-span-1"><InputText label="身分證/負責人" value={draft.landlord_id} onChange={(v:any) => setDraft({...draft, landlord_id: v})} /></div>
+                    
+                    {draft.contract_type !== 'general' && (
+                      <>
+                        <div className="col-span-1"><InputText label="統一編號" value={draft.landlord_company} onChange={(v:any) => setDraft({...draft, landlord_company: v})} /></div>
+                        <div className="col-span-1"><InputText label="服務業登記證字號" value={draft.landlord_license} onChange={(v:any) => setDraft({...draft, landlord_license: v})} /></div>
+                      </>
+                    )}
+                    <div className="col-span-1 md:col-span-2">
+                      <InputText label="聯絡地址" value={draft.landlord_address} onChange={(v:any) => setDraft({...draft, landlord_address: v})} />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              {/* 承租人 */}
+              <div className="space-y-4 mt-6">
                 {draft.tenants.map((t, idx) => (
                   <div key={`tenant-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white border-2 border-[#EFEBE8] p-5 rounded-2xl relative">
                     <div className="col-span-1 md:col-span-2 flex justify-between items-center">
@@ -452,10 +463,10 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                         <button onClick={() => removePerson('tenants', idx)} className="text-xs text-red-500 font-bold flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors"><Trash2 className="w-3 h-3"/> 移除</button>
                       )}
                     </div>
-                    <InputText label={idx === 0 ? "姓名 *" : "姓名"} value={t.name} onChange={(v) => handlePersonChange('tenants', idx, 'name', v)} />
-                    <InputText label="身分證字號" value={t.id_number} onChange={(v) => handlePersonChange('tenants', idx, 'id_number', v)} />
-                    <InputText label="聯絡電話" value={t.phone} onChange={(v) => handlePersonChange('tenants', idx, 'phone', v)} />
-                    <InputText label="戶籍地址" value={t.address} onChange={(v) => handlePersonChange('tenants', idx, 'address', v)} />
+                    <div className="col-span-1"><InputText label={idx === 0 ? "姓名 *" : "姓名"} value={t.name} onChange={(v:any) => handlePersonChange('tenants', idx, 'name', v)} /></div>
+                    <div className="col-span-1"><InputText label="身分證字號" value={t.id_number} onChange={(v:any) => handlePersonChange('tenants', idx, 'id_number', v)} /></div>
+                    <div className="col-span-1"><InputText label="聯絡電話" value={t.phone} onChange={(v:any) => handlePersonChange('tenants', idx, 'phone', v)} /></div>
+                    <div className="col-span-1"><InputText label="戶籍地址" value={t.address} onChange={(v:any) => handlePersonChange('tenants', idx, 'address', v)} /></div>
                   </div>
                 ))}
                 <button onClick={() => addPerson('tenants')} className="w-full py-3 border-2 border-dashed border-[#D1C7C0] text-[#8E7F74] rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#F9F7F5] transition-all">
@@ -463,6 +474,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                 </button>
               </div>
 
+              {/* 保證人 */}
               <div className="space-y-4 mt-6">
                 {draft.guarantors.map((g, idx) => (
                   <div key={`guarantor-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white border-2 border-[#EFEBE8] p-5 rounded-2xl relative">
@@ -470,10 +482,10 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                       <h4 className="font-bold text-sm text-[#8E7F74] flex items-center gap-2"><Users className="w-4 h-4"/> 保證人 {idx + 1}</h4>
                       <button onClick={() => removePerson('guarantors', idx)} className="text-xs text-red-500 font-bold flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors"><Trash2 className="w-3 h-3"/> 移除</button>
                     </div>
-                    <InputText label="姓名" value={g.name} onChange={(v) => handlePersonChange('guarantors', idx, 'name', v)} />
-                    <InputText label="身分證字號" value={g.id_number} onChange={(v) => handlePersonChange('guarantors', idx, 'id_number', v)} />
-                    <InputText label="聯絡電話" value={g.phone} onChange={(v) => handlePersonChange('guarantors', idx, 'phone', v)} />
-                    <InputText label="戶籍地址" value={g.address} onChange={(v) => handlePersonChange('guarantors', idx, 'address', v)} />
+                    <div className="col-span-1"><InputText label="姓名" value={g.name} onChange={(v:any) => handlePersonChange('guarantors', idx, 'name', v)} /></div>
+                    <div className="col-span-1"><InputText label="身分證字號" value={g.id_number} onChange={(v:any) => handlePersonChange('guarantors', idx, 'id_number', v)} /></div>
+                    <div className="col-span-1"><InputText label="聯絡電話" value={g.phone} onChange={(v:any) => handlePersonChange('guarantors', idx, 'phone', v)} /></div>
+                    <div className="col-span-1"><InputText label="戶籍地址" value={g.address} onChange={(v:any) => handlePersonChange('guarantors', idx, 'address', v)} /></div>
                   </div>
                 ))}
                 <button onClick={() => addPerson('guarantors')} className="w-full py-3 border-2 border-dashed border-[#D1C7C0] text-[#8E7F74] rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#F9F7F5] transition-all">
@@ -482,45 +494,48 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
               </div>
             </section>
 
-            {/* 如果是轉租同意書，不需要下面這些填寫 */}
+            {/* 轉租同意書不需要下面這些填寫 */}
             {draft.contract_type !== 'consent' && (
               <>
               {/* 2. 租期與財務 */}
               <section className="space-y-4">
                 <SectionTitle title="二、租期、租金與帳戶" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="grid grid-cols-2 gap-4 col-span-1 md:col-span-2">
-                    <InputDate label="起租日 *" value={draft.start_date} onChange={(v) => setDraft({...draft, start_date: v})} />
-                    <InputDate label="退租日 *" value={draft.end_date} onChange={(v) => setDraft({...draft, end_date: v})} />
-                  </div>
-                  <InputRow label="每月租金 *" value={draft.rent_amount} onChange={(v) => setDraft({...draft, rent_amount: v})} />
-                  <InputRow label="押金總額 (通常為2個月) *" value={draft.deposit_amount} onChange={(v) => setDraft({...draft, deposit_amount: v})} />
+                  <div className="col-span-1"><InputDate label="起租日 *" value={draft.start_date} onChange={(v:any) => setDraft({...draft, start_date: v})} /></div>
+                  <div className="col-span-1"><InputDate label="退租日 *" value={draft.end_date} onChange={(v:any) => setDraft({...draft, end_date: v})} /></div>
+                  <div className="col-span-1"><InputRow label="每月租金 *" value={draft.rent_amount} onChange={(v:any) => setDraft({...draft, rent_amount: v})} /></div>
+                  <div className="col-span-1"><InputRow label="押金總額 (通常為2個月) *" value={draft.deposit_amount} onChange={(v:any) => setDraft({...draft, deposit_amount: v})} /></div>
                   
                   {draft.contract_type === 'master' && (
-                    <div className="col-span-1 md:col-span-2 bg-[#EFEBE8]/30 p-4 rounded-xl border border-[#D1C7C0] flex flex-col md:flex-row items-center gap-4">
-                      <div className="flex items-center gap-2">
+                    <div className="col-span-1 md:col-span-2 bg-[#EFEBE8]/30 p-5 rounded-xl border border-[#D1C7C0] grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1">
                         <span className="text-sm font-bold text-[#3E342E]">裝修免租期 (天數)</span>
-                        <input type="number" className="w-24 h-10 rounded-lg px-3 text-center border border-[#D1C7C0] outline-none font-black text-[#3E342E]" value={draft.free_rent_days} onChange={(e) => setDraft({...draft, free_rent_days: Number(e.target.value)})} />
+                        <input type="number" className="w-full h-11 rounded-lg px-4 border border-[#D1C7C0] outline-none font-bold text-[#3E342E]" value={draft.free_rent_days} onChange={(e) => setDraft({...draft, free_rent_days: Number(e.target.value)})} />
+                        <span className="text-xs text-[#8E7F74]">自起租日起算，期間免付租金</span>
                       </div>
-                      <span className="text-xs text-[#8E7F74]">自起租日起算，期間免付租金</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-bold text-[#3E342E]">約定裝潢總成本 (NT$)</span>
+                        <input type="number" className="w-full h-11 rounded-lg px-4 border border-[#D1C7C0] outline-none font-bold text-[#3E342E]" value={draft.renovation_cost} onChange={(e) => setDraft({...draft, renovation_cost: Number(e.target.value)})} />
+                        <span className="text-xs text-red-500 font-bold">若屋主提前解約，需按剩餘比例買回殘值</span>
+                      </div>
                     </div>
                   )}
 
                   <div className="col-span-1 md:col-span-2 bg-[#F9F7F5] p-5 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-[#EFEBE8]">
                     <div className="md:col-span-3"><h4 className="font-bold text-sm text-[#3E342E] mb-2 flex items-center gap-2"><CreditCard className="w-4 h-4"/> 租金支付帳戶</h4></div>
-                    <div className="space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">支付方式</label>
+                    <div className="col-span-1 space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">支付方式</label>
                       <select className="w-full h-12 bg-white rounded-xl px-4 text-sm font-bold text-[#3E342E] border border-[#EFEBE8] outline-none" value={draft.payment_method} onChange={(e) => setDraft({...draft, payment_method: e.target.value})}>
                         <option value="轉帳">匯款/轉帳</option><option value="現金">現金</option>
                       </select>
                     </div>
-                    <InputText label="金融機構名稱 (含分行)" value={draft.bank_name} onChange={(v) => setDraft({...draft, bank_name: v})} />
-                    <InputText label="戶名" value={draft.bank_account_name} onChange={(v) => setDraft({...draft, bank_account_name: v})} />
-                    <div className="md:col-span-3"><InputText label="帳號" value={draft.bank_account} onChange={(v) => setDraft({...draft, bank_account: v})} /></div>
+                    <div className="col-span-1"><InputText label="金融機構名稱 (含分行)" value={draft.bank_name} onChange={(v:any) => setDraft({...draft, bank_name: v})} /></div>
+                    <div className="col-span-1"><InputText label="戶名" value={draft.bank_account_name} onChange={(v:any) => setDraft({...draft, bank_account_name: v})} /></div>
+                    <div className="md:col-span-3"><InputText label="帳號" value={draft.bank_account} onChange={(v:any) => setDraft({...draft, bank_account: v})} /></div>
                   </div>
                 </div>
               </section>
 
-              {/* 3. 費用與設備 (包租契約不需要填寫設備清單) */}
+              {/* 3. 費用與設備 */}
               {draft.contract_type !== 'master' && (
                 <section className="space-y-4">
                   <SectionTitle title="三、費用設定與設備點交" />
@@ -607,10 +622,10 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                       <input type="checkbox" className="w-6 h-6" checked={draft.allow_pets} onChange={(e) => setDraft({...draft, allow_pets: e.target.checked})} />
                     </div>
                     {draft.allow_pets && (
-                      <div className="grid grid-cols-3 gap-4 pt-2">
-                        <InputText label="種類(如:貓)" value={draft.pet_type} onChange={(v) => setDraft({...draft, pet_type: v})} />
-                        <InputRow label="數量" value={draft.pet_count} onChange={(v) => setDraft({...draft, pet_count: v})} />
-                        <InputText label="特徵/名字" value={draft.pet_name} onChange={(v) => setDraft({...draft, pet_name: v})} />
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                        <div className="col-span-1"><InputText label="種類(如:貓)" value={draft.pet_type} onChange={(v:any) => setDraft({...draft, pet_type: v})} /></div>
+                        <div className="col-span-1"><InputRow label="數量" value={draft.pet_count} onChange={(v:any) => setDraft({...draft, pet_count: v})} /></div>
+                        <div className="col-span-1"><InputText label="特徵/名字" value={draft.pet_name} onChange={(v:any) => setDraft({...draft, pet_name: v})} /></div>
                       </div>
                     )}
                   </div>
@@ -737,7 +752,7 @@ function ConsentDocument({ contract }: { contract: any }) {
   );
 }
 
-// --- 模板 2：包租契約書 (極簡版，加入核實認定之裝潢買回防護機制) ---
+// --- 模板 2：包租契約書 ---
 function MasterLeaseDocument({ contract }: { contract: any }) {
   const details = contract.details || {};
   const tenants = details.tenants && details.tenants.length > 0 ? details.tenants : [{ name: contract.tenant_name, id_front: '', id_back: '' }];
@@ -804,7 +819,7 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
           <p>4. 租期屆滿或終止時，乙方返還房屋之狀態約定為： ☐ 回復原狀 ☑ <strong>現況返還 (乙方同意保留裝潢現有價值無償移轉予甲方，不另要求回復原狀)</strong></p>
         </div>
 
-        {/* ✅ 強大的裝潢殘值買回機制 (改為單據核實認列) */}
+        {/* ✅ 強大的裝潢殘值買回機制 (核實認列) */}
         <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2 mt-6">第四條 提前解約與裝潢補償機制</h3>
         <div className="pl-4 space-y-3 mb-6 text-justify">
           <p>5. 租賃期間內，乙方若因經營考量需提前終止本約，應於 <strong>2</strong> 個月前通知甲方，並支付 <strong>1</strong> 個月租金作為違約金後，得終止本約。屋內既有裝潢無償歸甲方所有。</p>
@@ -839,7 +854,6 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
       <div className="pt-4">
         <h2 className="text-xl font-black text-center border-b-2 border-[#3E342E] pb-2 mb-6 tracking-widest">契約附件 - 身分證影本留存</h2>
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-12">
-          {/* 出租人身分證 */}
           <div className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-white w-full max-w-[450px]">
             <h3 className="text-lg font-black text-center mb-6 text-[#8E7F74] border-b border-[#D1C7C0] pb-2">出租人 (甲方)：{landlordName}</h3>
             <div className="flex flex-row justify-center gap-6">
@@ -848,7 +862,6 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
             </div>
           </div>
           
-          {/* 承租人身分證 */}
           {tenants.map((t: any, idx: number) => (
             <div key={`idcard-t-${idx}`} className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-[#F9F7F5] w-full max-w-[450px]">
               <h3 className="text-lg font-black text-center mb-6 text-[#3E342E] border-b border-[#D1C7C0] pb-2">承租人 (乙方)：{t.name}</h3>
@@ -865,7 +878,7 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
   );
 }
 
-// --- 模板 3 & 4：一般出租 & 轉租契約書 (標準版) ---
+// --- 模板 3 & 4：一般出租 & 轉租契約書 ---
 function StandardLeaseDocument({ contract }: { contract: any }) {
   const details = contract.details || {};
   
@@ -892,7 +905,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
   return (
     <div className="text-justify text-[11pt] leading-[1.6] font-serif text-[#3E342E] p-[15mm]">
       
-      {/* ---------------- PAGE 0: 專屬無印風封面 ---------------- */}
+      {/* ---------------- PAGE 0: 封面 ---------------- */}
       <div className="break-after-page flex flex-col pt-24 pb-12 min-h-[260mm] px-10 relative">
         <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E]"></div>
         <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74]"></div>
@@ -933,7 +946,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
         <h1 className="text-2xl font-black text-center mb-8 tracking-widest text-[#3E342E]">租賃契約書</h1>
 
         <div className="space-y-4 mb-8 text-sm break-inside-avoid">
-          {/* ✅ 動態顯示出租方資訊 (如果是轉租會有公司跟字號) */}
+          {/* ✅ 動態顯示出租方資訊 (轉租會帶入統編與字號) */}
           <div className="flex flex-col gap-1">
              <div className="flex gap-2"><strong className="min-w-[120px] text-[#8E7F74]">出租人 (甲方) :</strong> <span className="font-bold">{landlordName}</span></div>
              {contract.contract_type === 'sublease' && details.landlord?.company && <div className="flex gap-2"><strong className="min-w-[120px] text-[#8E7F74]">統一編號 :</strong> <span>{details.landlord.company}</span></div>}
@@ -1061,19 +1074,19 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
         <div className="break-inside-avoid mb-6">
           <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2">七、寵物飼養與違約責任</h3>
           <div className="pl-4 space-y-2 text-sm text-justify">
-            <p>本租賃標的原則上禁止飼養寵物（包含但不限於狗、貓、爬蟲類等），除經出租人書面同意並簽署寵物條款者不在此限。針對寵物飼養行為，雙方同意依下列規範辦理：</p>
-            <p><strong>1. 未經同意擅自飼養（偷養）之罰則：</strong> 若乙方未經書面同意，擅自攜帶寵物進入租賃標的飼養（包含暫放），視為重大違約：</p>
+            <p>本租賃標的原則上禁止飼養寵物（包含但不限於狗、貓、爬蟲類等），除經出租人同意並簽署寵物條款者不在此限。針對寵物飼養行為，雙方同意依下列規範辦理：</p>
+            <p><strong>1. 未經同意擅自飼養（偷養）之罰則：</strong> 若乙方未經同意擅自攜帶寵物進入飼養（包含暫放），視為重大違約：</p>
             <ul className="list-disc pl-8 space-y-0.5">
               <li><strong>懲罰性違約金：</strong> 乙方應支付相當於一個月租金之懲罰性違約金。</li>
-              <li><strong>限期遷離：</strong> 乙方應於甲方發現並通知後 3 日內 將寵物遷離。</li>
+              <li><strong>限期遷離：</strong> 乙方應於甲方通知後 3 日內 將寵物遷離。</li>
               <li><strong>強制清潔費：</strong> 乙方需負擔全室專業除蟲、消毒及細部清潔費用。</li>
               <li><strong>終止契約：</strong> 若乙方拒絕將寵物遷離，甲方得終止租約。</li>
             </ul>
             <p><strong>2. 經同意飼養但造成滋擾（吵鬧/異味）之罰則：</strong> 若該寵物之行為干擾鄰居安寧或公共衛生，遭投訴達 2 次（含）以上者：</p>
             <ul className="list-disc pl-8 space-y-0.5">
-              <li><strong>撤銷飼養許可：</strong> 甲方有權撤銷飼養許可，乙方應於 7 日內 將寵物遷離。</li>
-              <li><strong>損害賠償：</strong> 若導致甲方遭管委會裁罰，乙方應負擔全額罰款及賠償。</li>
-              <li><strong>終止契約：</strong> 若未將寵物遷離或再度私自带回，甲方得終止租賃契約。</li>
+              <li><strong>撤銷飼養許可：</strong> 甲方有權撤銷許可，乙方應於 7 日內 將寵物遷離。</li>
+              <li><strong>損害賠償：</strong> 若導致甲方遭管委會裁罰，乙方應負擔全額罰款。</li>
+              <li><strong>終止契約：</strong> 若未將寵物遷離，甲方得終止租賃契約。</li>
             </ul>
           </div>
         </div>
@@ -1315,9 +1328,9 @@ interface CardProps { icon: React.ReactNode; title: string; onClick: () => void;
 function ContractTypeCard({ icon, title, onClick }: CardProps) { return <div onClick={onClick} className="bg-white p-5 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center cursor-pointer border border-[#EFEBE8] hover:border-[#3E342E] transition-all active:scale-95 group"><div className="bg-[#F9F7F5] p-3 rounded-full mb-2 group-hover:scale-110 transition-transform">{icon}</div><h3 className="font-black text-sm text-[#3E342E]">{title}</h3></div>; }
 
 interface InputProps { label: string; value: string | number; onChange: (v: string) => void; placeholder?: string; }
-function InputText({ label, value, onChange, placeholder }: InputProps) { return <div className="space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">{label}</label><input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full h-12 bg-white border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold focus:border-[#3E342E] outline-none" /></div>; }
-function InputDate({ label, value, onChange }: InputProps) { return <div className="space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">{label}</label><input type="date" value={value as string} onChange={(e) => onChange(e.target.value)} className="w-full h-12 bg-white border border-[#EFEBE8] rounded-xl px-4 text-sm font-bold outline-none text-[#3E342E]" /></div>; }
-function InputRow({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void; }) { return <div className="space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">{label}</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#D1C7C0]">NT$</span><input type="number" value={value || ''} onChange={(e) => onChange(Number(e.target.value))} className="w-full h-12 bg-white border border-[#EFEBE8] rounded-xl pl-12 pr-4 text-sm font-bold outline-none text-[#3E342E]" /></div></div>; }
+function InputText({ label, value, onChange, placeholder }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold focus:border-[#3E342E] outline-none box-border" /></div>; }
+function InputDate({ label, value, onChange }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><input type="date" value={value as string} onChange={(e) => onChange(e.target.value)} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold outline-none text-[#3E342E] box-border" /></div>; }
+function InputRow({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void; }) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#D1C7C0]">NT$</span><input type="number" value={value || ''} onChange={(e) => onChange(Number(e.target.value))} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl pl-12 pr-4 text-sm font-bold outline-none text-[#3E342E] box-border" /></div></div>; }
 
 interface ImageUploaderProps { label: string; image: string; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemove: () => void; isSmall?: boolean; }
 function ImageUploader({ label, image, onUpload, onRemove, isSmall }: ImageUploaderProps) {

@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../../lib/supabase'; 
-import { ArrowLeft, FileText, User, Calendar, Plus, X, CheckCircle2, Home, FileSignature, FileEdit, Printer, UploadCloud, PawPrint, Camera, CreditCard, Trash2, Users, Edit3, Copy, Zap } from 'lucide-react';
+import { ArrowLeft, FileText, User, Calendar, Plus, X, CheckCircle2, Home, FileSignature, FileEdit, Printer, UploadCloud, Zap, Camera, CreditCard, Trash2, Users, Edit3, Copy, PawPrint } from 'lucide-react';
 
 // ==========================================
-// 資料結構定義與預設值
+// 資料與邏輯預設值
 // ==========================================
 const defaultEquipment = [
   { area: '客廳', name: '液晶電視', brand: '', quantity: 1, status: '正常', remark: '', compensation: '' },
@@ -20,8 +20,8 @@ const defaultEquipment = [
 ];
 
 const defaultFees = {
-  management: { payer: '承租人', amount: 0 },
-  space: { payer: '承租人', amount: 0 },
+  management: { payer: '承租人', amount: '' },
+  space: { payer: '承租人', amount: '' },
   water: { payer: '承租人', type: '台水帳單', amount: 0 },
   electricity: { payer: '承租人', billing_method: '依當期每度平均電價', rate: 5 },
   gas: { payer: '承租人', amount: 0 },
@@ -37,39 +37,28 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
   const [viewMode, setViewMode] = useState<'hub' | 'drafting' | 'preview'>('hub');
   const [viewingContract, setViewingContract] = useState<any | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [draft, setDraft] = useState({
-    contract_type: 'general',
-    room_number: '',
-    property_address: '', 
+    contract_type: 'general', room_number: '', property_address: '',
     landlord_name: '', landlord_id: '', landlord_company: '', landlord_address: '', landlord_license: '', 
-    original_owner: '', 
-    tenants: [newPerson()],
-    guarantors: [] as any[],
-    start_date: '', end_date: '', rent_amount: 0, deposit_amount: 0,
+    original_owner: '', tenants: [newPerson()], guarantors: [] as any[],
+    start_date: '', end_date: '', rent_amount: 0, deposit_amount: 0, rent_due_day: '',
     payment_method: '轉帳', bank_name: '', bank_account_name: '', bank_account: '',
-    fees: JSON.parse(JSON.stringify(defaultFees)),
-    equipment: JSON.parse(JSON.stringify(defaultEquipment)),
-    special_terms: '1. 室內全面禁菸。\n2. 禁止擅自變更房屋結構。',
-    allow_pets: false, pet_type: '', pet_count: 1, pet_name: '',
-    early_termination_allowed: true,
-    free_rent_days: 30,
-    renovation_cost: 0,
-    property_photos: Array(15).fill('')
+    fees: JSON.parse(JSON.stringify(defaultFees)), equipment: JSON.parse(JSON.stringify(defaultEquipment)),
+    special_terms: '1. 室內全面禁菸。\n2. 禁止擅自變更房屋結構。', allow_pets: false, pet_type: '', pet_count: 1, pet_name: '',
+    early_termination_allowed: true, free_rent_days: 30, property_photos: Array(15).fill(''), renovation_cost: 0
   });
 
   const fetchData = async () => {
     setLoading(true);
-    try {
-      const { data: contractData } = await supabase.from('contracts').select('*').eq('property_id', params.id).order('created_at', { ascending: false });
-      if (contractData) setContracts(contractData);
-      const { data: roomData } = await supabase.from('rooms').select('room_number, rent_amount, deposit').eq('property_id', params.id).order('room_number', { ascending: true });
-      if (roomData) setAvailableRooms(roomData);
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+    const { data: cData } = await supabase.from('contracts').select('*').eq('property_id', params.id).order('created_at', { ascending: false });
+    const { data: rData } = await supabase.from('rooms').select('room_number, rent_amount, deposit').eq('property_id', params.id).order('room_number', { ascending: true });
+    if (cData) setContracts(cData);
+    if (rData) setAvailableRooms(rData);
+    setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, [params.id]);
@@ -79,7 +68,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     setDraft({ ...draft, room_number, rent_amount: room?.rent_amount || 0, deposit_amount: room?.deposit || 0 });
   };
 
-  // ✅ 智慧一鍵帶入：根據不同合約類型給予不同資料
   const handleFillDummyData = () => {
     const defaultRoom = availableRooms.length > 0 ? availableRooms[0].room_number : '101';
     const isMasterOrSub = draft.contract_type === 'master' || draft.contract_type === 'sublease';
@@ -94,30 +82,27 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
       landlord_address: '台中市北屯區台灣大道三段99號',
       landlord_license: isMasterOrSub ? '中市租登字第11200001號' : '',
       original_owner: '張原屋',
-      tenants: [
-        { name: '陳小美', id_number: 'B222333444', phone: '0912-345-678', address: '台北市大安區忠孝東路四段1號', id_front: '', id_back: '' },
-      ],
-      guarantors: [
-        { name: '陳大山', id_number: 'D333444555', phone: '0955-111-222', address: '新北市板橋區復興路12號', id_front: '', id_back: '' }
-      ],
+      tenants: [{ name: '陳小美', id_number: 'B222333444', phone: '0912-345-678', address: '台北市大安區忠孝東路四段1號', id_front: '', id_back: '' }],
+      guarantors: [{ name: '陳大山', id_number: 'D333444555', phone: '0955-111-222', address: '新北市板橋區復興路12號', id_front: '', id_back: '' }],
       start_date: '2024-06-01',
       end_date: draft.contract_type === 'master' ? '2029-05-31' : '2025-05-31', 
       rent_amount: 18500,
       deposit_amount: 37000,
+      rent_due_day: '5', 
       payment_method: '轉帳',
       bank_name: '國泰世華銀行 (013)',
       bank_account_name: isMasterOrSub ? '好室多物管顧問' : '王金主',
       bank_account: '013-1234567890',
-      allow_pets: true,
-      pet_type: '橘貓',
-      pet_count: 1,
-      pet_name: '胖橘',
-      early_termination_allowed: true,
-      free_rent_days: 30,
-      renovation_cost: 350000,
+      fees: {
+        ...draft.fees,
+        management: { payer: '承租人', amount: 1000 },
+        space: { payer: '承租人', amount: 500 }
+      },
+      allow_pets: true, pet_type: '橘貓', pet_count: 1, pet_name: '胖橘',
+      early_termination_allowed: true, free_rent_days: 30, renovation_cost: 350000,
       special_terms: '1. 室內全面禁菸。\n2. 禁止擅自變更房屋結構。\n3. 每月按時繳租可折抵100元。'
     });
-    alert('✅ 測試資料已秒速帶入！您可以直接預覽或儲存了。');
+    alert('✅ 測試資料已秒速帶入！');
   };
 
   const handlePersonChange = (type: 'tenants' | 'guarantors', index: number, field: string, value: string) => {
@@ -146,32 +131,19 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = (event) => {
+      reader.onloadend = (ev) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800; 
-          const MAX_HEIGHT = 800; 
-          let width = img.width;
-          let height = img.height;
-          if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
-          else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-          canvas.width = width; canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
-
-          if (type === 'property') {
-            const newPhotos = [...draft.property_photos];
-            newPhotos[index] = compressedBase64;
-            setDraft({ ...draft, property_photos: newPhotos });
-          } else if (type === 'person' && field && personType) {
-            const newList = [...draft[personType]];
-            newList[index] = { ...newList[index], [field]: compressedBase64 };
-            setDraft({ ...draft, [personType]: newList });
-          }
+          const MAX = 800; let w = img.width, h = img.height;
+          if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d'); ctx?.drawImage(img, 0, 0, w, h);
+          const compressed = canvas.toDataURL('image/jpeg', 0.6);
+          if (type === 'property') { const p = [...draft.property_photos]; p[index] = compressed; setDraft({ ...draft, property_photos: p }); } 
+          else if (type === 'person' && field && personType) { const n = [...draft[personType]]; n[index] = { ...n[index], [field]: compressed }; setDraft({ ...draft, [personType]: n }); }
         };
-        img.src = event.target?.result as string;
+        img.src = ev.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -197,26 +169,18 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     let p_type = '', p_count = 1, p_name = '';
     if (contract.pet_details) {
       const parts = contract.pet_details.split(' / ');
-      if (parts.length >= 3) {
-        p_type = parts[0].replace('種類:', ''); p_count = Number(parts[1].replace('數量:', '')) || 1; p_name = parts[2].replace('名字:', '');
-      } else { p_type = contract.pet_details; }
+      if (parts.length >= 3) { p_type = parts[0].replace('種類:', ''); p_count = Number(parts[1].replace('數量:', '')) || 1; p_name = parts[2].replace('名字:', ''); } 
+      else { p_type = contract.pet_details; }
     }
 
     setDraft({
-      contract_type: contract.contract_type || 'general',
-      room_number: contract.room_number || '',
-      property_address: d.property_address || '',
+      contract_type: contract.contract_type || 'general', room_number: contract.room_number || '', property_address: d.property_address || '',
       landlord_name: d.landlord?.name || '', landlord_id: d.landlord?.id || '', landlord_company: d.landlord?.company || '', landlord_address: d.landlord?.address || '', landlord_license: d.landlord?.license || '',
-      tenants: loadedTenants, guarantors: d.guarantors || [],
-      start_date: contract.start_date || '', end_date: contract.end_date || '', rent_amount: contract.rent_amount || 0, deposit_amount: contract.deposit_amount || 0,
-      payment_method: d.payment?.method || '轉帳', bank_name: d.payment?.bank || '', bank_account_name: d.payment?.account_name || '', bank_account: d.payment?.account || '',
+      tenants: loadedTenants, guarantors: d.guarantors || [], start_date: contract.start_date || '', end_date: contract.end_date || '', rent_amount: contract.rent_amount || 0, deposit_amount: contract.deposit_amount || 0,
+      rent_due_day: d.rent_due_day || '', payment_method: d.payment?.method || '轉帳', bank_name: d.payment?.bank || '', bank_account_name: d.payment?.account_name || '', bank_account: d.payment?.account || '',
       fees: d.fees || JSON.parse(JSON.stringify(defaultFees)), equipment: d.equipment || JSON.parse(JSON.stringify(defaultEquipment)),
-      special_terms: contract.special_terms || '', allow_pets: contract.allow_pets || false, 
-      pet_type: p_type, pet_count: p_count, pet_name: p_name,
-      early_termination_allowed: d.early_termination_allowed ?? true,
-      free_rent_days: d.free_rent_days || 30,
-      renovation_cost: d.renovation_cost || 0,
-      property_photos: d.images?.property_photos || Array(15).fill(''), original_owner: contract.original_owner || ''
+      special_terms: contract.special_terms || '', allow_pets: contract.allow_pets || false, pet_type: p_type, pet_count: p_count, pet_name: p_name,
+      early_termination_allowed: d.early_termination_allowed ?? true, free_rent_days: d.free_rent_days || 30, renovation_cost: d.renovation_cost || 0, property_photos: d.images?.property_photos || Array(15).fill(''), original_owner: contract.original_owner || ''
     });
     setViewMode('drafting');
   };
@@ -228,81 +192,49 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     setDraft({
       contract_type: contract.contract_type || 'general', room_number: '', property_address: '',
       landlord_name: d.landlord?.name || '', landlord_id: d.landlord?.id || '', landlord_company: d.landlord?.company || '', landlord_address: d.landlord?.address || '', landlord_license: d.landlord?.license || '',
-      tenants: [newPerson()], guarantors: [], start_date: '', end_date: '', rent_amount: contract.rent_amount || 0, deposit_amount: contract.deposit_amount || 0,
+      tenants: [newPerson()], guarantors: [], start_date: '', end_date: '', rent_amount: contract.rent_amount || 0, deposit_amount: contract.deposit_amount || 0, rent_due_day: d.rent_due_day || '',
       payment_method: d.payment?.method || '轉帳', bank_name: d.payment?.bank || '', bank_account_name: d.payment?.account_name || '', bank_account: d.payment?.account || '',
       fees: d.fees || JSON.parse(JSON.stringify(defaultFees)), equipment: d.equipment || JSON.parse(JSON.stringify(defaultEquipment)), 
-      special_terms: contract.special_terms || '', allow_pets: contract.allow_pets || false, 
-      pet_type: '', pet_count: 1, pet_name: '', 
-      early_termination_allowed: d.early_termination_allowed ?? true,
-      free_rent_days: d.free_rent_days || 30,
-      renovation_cost: d.renovation_cost || 0,
-      property_photos: Array(15).fill(''), original_owner: contract.original_owner || ''
+      special_terms: contract.special_terms || '', allow_pets: contract.allow_pets || false, pet_type: '', pet_count: 1, pet_name: '', 
+      early_termination_allowed: d.early_termination_allowed ?? true, free_rent_days: d.free_rent_days || 30, renovation_cost: d.renovation_cost || 0, property_photos: Array(15).fill(''), original_owner: contract.original_owner || ''
     });
     setViewMode('drafting');
     alert('已為您複製合約模板！請選擇新房號或填寫新標的地址。');
   };
 
   const handleGenerateContract = async () => {
-    if (draft.contract_type === 'master' && !draft.property_address) return alert('請填寫包租標的地址！');
-    if (draft.contract_type !== 'master' && !draft.room_number) return alert('請選擇房號！');
+    if (draft.contract_type !== 'master' && !draft.room_number) return alert('請選擇房號');
+    if (draft.contract_type === 'master' && !draft.property_address) return alert('請填寫包租地址');
     if (!draft.tenants[0]?.name || !draft.start_date || !draft.end_date) return alert('請填寫必填欄位 (姓名、起訖日)！');
-    
+
     setSaving(true);
-    try {
-      const payload = {
-        property_id: params.id,
-        contract_type: draft.contract_type,
-        room_number: draft.contract_type === 'master' ? '包租全戶' : draft.room_number,
-        tenant_name: draft.tenants[0].name,
-        tenant_id_number: draft.tenants[0].id_number,
-        tenant_phone: draft.tenants[0].phone,
-        start_date: draft.start_date,
-        end_date: draft.end_date,
-        rent_amount: draft.rent_amount,
-        deposit_amount: draft.deposit_amount,
-        electricity_rate: draft.fees.electricity.rate, 
-        special_terms: draft.special_terms,
-        allow_pets: draft.allow_pets,
-        pet_details: draft.allow_pets ? `種類:${draft.pet_type} / 數量:${draft.pet_count} / 名字:${draft.pet_name}` : '',
-        original_owner: draft.original_owner,
-        details: {
-          property_address: draft.property_address,
-          landlord: { name: draft.landlord_name, id: draft.landlord_id, company: draft.landlord_company, address: draft.landlord_address, license: draft.landlord_license },
-          tenants: draft.tenants, guarantors: draft.guarantors,
-          payment: { method: draft.payment_method, bank: draft.bank_name, account_name: draft.bank_account_name, account: draft.bank_account },
-          fees: draft.fees, equipment: draft.equipment, images: { property_photos: draft.property_photos },
-          early_termination_allowed: draft.early_termination_allowed,
-          free_rent_days: draft.free_rent_days, renovation_cost: draft.renovation_cost
-        }
-      };
-
-      if (editingId) {
-        const { error } = await supabase.from('contracts').update(payload).eq('id', editingId);
-        if (error) throw error;
-        alert('合約已成功修改更新！✏️');
-      } else {
-        const { error } = await supabase.from('contracts').insert([payload]);
-        if (error) throw error;
-        alert('正式合約建立成功！🎉');
+    const payload = {
+      property_id: params.id, contract_type: draft.contract_type, room_number: draft.contract_type === 'master' ? '包租標的' : draft.room_number,
+      tenant_name: draft.tenants[0].name, tenant_id_number: draft.tenants[0].id_number, tenant_phone: draft.tenants[0].phone,
+      start_date: draft.start_date, end_date: draft.end_date, rent_amount: draft.rent_amount, deposit_amount: draft.deposit_amount,
+      special_terms: draft.special_terms, allow_pets: draft.allow_pets, pet_details: draft.allow_pets ? `種類:${draft.pet_type} / 數量:${draft.pet_count} / 名字:${draft.pet_name}` : '',
+      original_owner: draft.original_owner,
+      details: {
+        property_address: draft.property_address,
+        rent_due_day: draft.rent_due_day, 
+        landlord: { name: draft.landlord_name, id: draft.landlord_id, company: draft.landlord_company, address: draft.landlord_address, license: draft.landlord_license },
+        tenants: draft.tenants, guarantors: draft.guarantors, payment: { method: draft.payment_method, bank: draft.bank_name, account_name: draft.bank_account_name, account: draft.bank_account },
+        fees: draft.fees, equipment: draft.equipment, images: { property_photos: draft.property_photos }, early_termination_allowed: draft.early_termination_allowed, free_rent_days: draft.free_rent_days, renovation_cost: draft.renovation_cost
       }
-      
-      if (draft.contract_type !== 'master') {
-        await supabase.from('rooms').update({
-          tenant_name: draft.tenants[0].name, phone: draft.tenants[0].phone, rent_amount: draft.rent_amount, deposit: draft.deposit_amount, contract_start: draft.start_date, contract_end: draft.end_date
-        }).eq('property_id', params.id).eq('room_number', draft.room_number);
-      }
-
-      setEditingId(null);
-      setViewMode('hub');
-      fetchData();
-    } catch (err: any) { alert(`儲存失敗: ${err.message}`); } finally { setSaving(false); }
+    };
+    
+    const { error } = editingId ? await supabase.from('contracts').update(payload).eq('id', editingId) : await supabase.from('contracts').insert([payload]);
+    if (!error && draft.contract_type !== 'master') {
+      await supabase.from('rooms').update({ status: 'occupied', tenant_name: draft.tenants[0].name, phone: draft.tenants[0].phone, contract_start: draft.start_date, contract_end: draft.end_date }).eq('property_id', params.id).eq('room_number', draft.room_number);
+    }
+    setSaving(false); setEditingId(null); setViewMode('hub'); fetchData();
   };
 
   const handleResetDraft = () => {
     setEditingId(null);
     setDraft({
       contract_type: 'general', room_number: '', property_address: '', landlord_name: '', landlord_id: '', landlord_company: '', landlord_address: '', landlord_license: '',
-      tenants: [newPerson()], guarantors: [], start_date: '', end_date: '', rent_amount: 0, deposit_amount: 0,
+      tenants: [newPerson()], guarantors: [], start_date: '', end_date: '', rent_amount: 0, deposit_amount: 0, rent_due_day: '',
       payment_method: '轉帳', bank_name: '', bank_account_name: '', bank_account: '',
       fees: JSON.parse(JSON.stringify(defaultFees)), equipment: JSON.parse(JSON.stringify(defaultEquipment)),
       special_terms: '1. 室內全面禁菸。\n2. 禁止擅自變更房屋結構。', allow_pets: false, pet_type: '', pet_count: 1, pet_name: '',
@@ -332,11 +264,11 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
         <div className="w-10"></div>
       </div>
 
-      <div className="px-4 md:px-8 space-y-8 pb-20 mt-6">
+      <div className="px-4 md:px-8 space-y-8 pb-20 mt-6 max-w-5xl mx-auto">
 
         {/* ================= HUB 首頁 ================= */}
         {viewMode === 'hub' && (
-          <div className="space-y-8 animate-in fade-in max-w-5xl mx-auto">
+          <div className="space-y-8 animate-in fade-in">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <ContractTypeCard icon={<Home className="w-6 h-6 text-orange-500" />} title="包租契約書" onClick={() => { handleResetDraft(); setDraft(prev => ({...prev, contract_type: 'master'})); setViewMode('drafting'); }} />
               <ContractTypeCard icon={<FileText className="w-6 h-6 text-purple-500" />} title="轉租同意書" onClick={() => { handleResetDraft(); setDraft(prev => ({...prev, contract_type: 'consent'})); setViewMode('drafting'); }} />
@@ -396,8 +328,8 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                </button>
             </div>
 
-            <h2 className="font-black text-2xl border-b-2 border-[#3E342E] pb-4 flex items-center justify-start gap-3 mt-4 md:mt-0 text-[#3E342E]">
-              <FileSignature className="w-6 h-6 text-[#3E342E]" /> 
+            <h2 className="font-black text-2xl border-b-2 border-[#3E342E] pb-4 text-[#3E342E]">
+              <FileSignature className="w-6 h-6 inline-block mr-2 text-[#3E342E]" /> 
               {editingId ? '編輯' : '建立'} 
               {draft.contract_type === 'general' && ' 一般出租契約'}
               {draft.contract_type === 'sublease' && ' 轉租契約書'}
@@ -412,7 +344,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
               
               <div className="bg-[#F9F7F5] p-5 md:p-6 rounded-2xl border border-[#EFEBE8] grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* ✅ 修復排版：保證每一個 InputText 在 Grid 中都能完整延伸 */}
                 {draft.contract_type === 'master' ? (
                   <div className="col-span-1 md:col-span-2 space-y-1">
                     <label className="text-[10px] font-black text-[#8E7F74]">包租標的地址 (整棟/整層) *</label>
@@ -433,7 +364,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                   </div>
                 )}
                 
-                {/* 出租方資訊 */}
                 <div className="col-span-1 md:col-span-2 pt-4 border-t border-[#D1C7C0]">
                   <h4 className="font-bold text-sm text-[#3E342E] mb-4">出租方資訊 (甲方)</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -453,7 +383,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                 </div>
               </div>
 
-              {/* 承租人 */}
               <div className="space-y-4 mt-6">
                 {draft.tenants.map((t, idx) => (
                   <div key={`tenant-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white border-2 border-[#EFEBE8] p-5 rounded-2xl relative">
@@ -474,7 +403,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                 </button>
               </div>
 
-              {/* 保證人 */}
               <div className="space-y-4 mt-6">
                 {draft.guarantors.map((g, idx) => (
                   <div key={`guarantor-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white border-2 border-[#EFEBE8] p-5 rounded-2xl relative">
@@ -503,8 +431,11 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="col-span-1"><InputDate label="起租日 *" value={draft.start_date} onChange={(v:any) => setDraft({...draft, start_date: v})} /></div>
                   <div className="col-span-1"><InputDate label="退租日 *" value={draft.end_date} onChange={(v:any) => setDraft({...draft, end_date: v})} /></div>
-                  <div className="col-span-1"><InputRow label="每月租金 *" value={draft.rent_amount} onChange={(v:any) => setDraft({...draft, rent_amount: v})} /></div>
-                  <div className="col-span-1"><InputRow label="押金總額 (通常為2個月) *" value={draft.deposit_amount} onChange={(v:any) => setDraft({...draft, deposit_amount: v})} /></div>
+                  <div className="col-span-1"><InputRow label="每月租金 *" value={draft.rent_amount} onChange={(v:any) => setDraft({...draft, rent_amount: v})} prefix="NT$" /></div>
+                  
+                  <div className="col-span-1"><InputRow label="每月收租日 (號) *" value={draft.rent_due_day as any} onChange={(v:any) => setDraft({...draft, rent_due_day: v})} prefix="" placeholder="例: 5" /></div>
+
+                  <div className="col-span-1 md:col-span-2"><InputRow label="押金總額 (通常為2個月) *" value={draft.deposit_amount} onChange={(v:any) => setDraft({...draft, deposit_amount: v})} prefix="NT$" /></div>
                   
                   {draft.contract_type === 'master' && (
                     <div className="col-span-1 md:col-span-2 bg-[#EFEBE8]/30 p-5 rounded-xl border border-[#D1C7C0] grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -523,8 +454,8 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
 
                   <div className="col-span-1 md:col-span-2 bg-[#F9F7F5] p-5 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-[#EFEBE8]">
                     <div className="md:col-span-3"><h4 className="font-bold text-sm text-[#3E342E] mb-2 flex items-center gap-2"><CreditCard className="w-4 h-4"/> 租金支付帳戶</h4></div>
-                    <div className="col-span-1 space-y-1"><label className="text-[10px] font-black text-[#8E7F74]">支付方式</label>
-                      <select className="w-full h-12 bg-white rounded-xl px-4 text-sm font-bold text-[#3E342E] border border-[#EFEBE8] outline-none" value={draft.payment_method} onChange={(e) => setDraft({...draft, payment_method: e.target.value})}>
+                    <div className="col-span-1 space-y-1"><label className="text-[10px] font-black text-[#8E7F74] block">支付方式</label>
+                      <select className="w-full h-12 bg-white rounded-xl px-4 text-sm font-bold text-[#3E342E] border border-[#EFEBE8] outline-none box-border" value={draft.payment_method} onChange={(e) => setDraft({...draft, payment_method: e.target.value})}>
                         <option value="轉帳">匯款/轉帳</option><option value="現金">現金</option>
                       </select>
                     </div>
@@ -538,8 +469,16 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
               {/* 3. 費用與設備 */}
               {draft.contract_type !== 'master' && (
                 <section className="space-y-4">
-                  <SectionTitle title="三、費用設定與設備點交" />
+                  <SectionTitle title="三、附加費用設定與設備點交" />
                   
+                  <div className="bg-[#F9F7F5] p-5 rounded-2xl space-y-4 border border-[#EFEBE8]">
+                    <h4 className="font-bold text-sm text-[#3E342E]">每月附加費用 (若無請留空)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="col-span-1"><InputRow label="大樓管理費" value={draft.fees.management.amount as any} onChange={(v:any) => setDraft({...draft, fees: {...draft.fees, management: {...draft.fees.management, amount: v}}})} prefix="NT$" /></div>
+                      <div className="col-span-1"><InputRow label="空間管理費 (清運/代收等)" value={draft.fees.space.amount as any} onChange={(v:any) => setDraft({...draft, fees: {...draft.fees, space: {...draft.fees.space, amount: v}}})} prefix="NT$" /></div>
+                    </div>
+                  </div>
+
                   <div className="bg-[#F9F7F5] p-5 rounded-2xl space-y-4 border border-[#EFEBE8]">
                     <h4 className="font-bold text-sm text-[#3E342E]">電費約定設定</h4>
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
@@ -624,7 +563,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                     {draft.allow_pets && (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                         <div className="col-span-1"><InputText label="種類(如:貓)" value={draft.pet_type} onChange={(v:any) => setDraft({...draft, pet_type: v})} /></div>
-                        <div className="col-span-1"><InputRow label="數量" value={draft.pet_count} onChange={(v:any) => setDraft({...draft, pet_count: v})} /></div>
+                        <div className="col-span-1"><InputRow label="數量" value={draft.pet_count} onChange={(v:any) => setDraft({...draft, pet_count: v})} prefix="" /></div>
                         <div className="col-span-1"><InputText label="特徵/名字" value={draft.pet_name} onChange={(v:any) => setDraft({...draft, pet_name: v})} /></div>
                       </div>
                     )}
@@ -645,9 +584,9 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                   {draft.tenants.map((t, idx) => (
                     <div key={`id-tenant-${idx}`} className="bg-white border-2 border-[#EFEBE8] p-4 rounded-xl">
                       <h4 className="font-bold text-sm mb-3 text-[#3E342E]">承租人 {idx + 1}：{t.name || '(未填寫姓名)'} - 身分證上傳</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <ImageUploader label="正面" image={t.id_front} onUpload={(e) => handleImageUpload(e, 'person', idx, 'id_front', 'tenants')} onRemove={() => handlePersonChange('tenants', idx, 'id_front', '')} />
-                        <ImageUploader label="反面" image={t.id_back} onUpload={(e) => handleImageUpload(e, 'person', idx, 'id_back', 'tenants')} onRemove={() => handlePersonChange('tenants', idx, 'id_back', '')} />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <ImageUploader label="正面" image={t.id_front} onUpload={(e:any) => handleImageUpload(e, 'person', idx, 'id_front', 'tenants')} onRemove={() => handlePersonChange('tenants', idx, 'id_front', '')} />
+                        <ImageUploader label="反面" image={t.id_back} onUpload={(e:any) => handleImageUpload(e, 'person', idx, 'id_back', 'tenants')} onRemove={() => handlePersonChange('tenants', idx, 'id_back', '')} />
                       </div>
                     </div>
                   ))}
@@ -658,9 +597,9 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                     {draft.guarantors.map((g, idx) => (
                       <div key={`id-guar-${idx}`} className="bg-white border-2 border-[#EFEBE8] p-4 rounded-xl">
                         <h4 className="font-bold text-sm mb-3 text-[#8E7F74]">保證人 {idx + 1}：{g.name || '(未填寫姓名)'} - 身分證上傳</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <ImageUploader label="正面" image={g.id_front} onUpload={(e) => handleImageUpload(e, 'person', idx, 'id_front', 'guarantors')} onRemove={() => handlePersonChange('guarantors', idx, 'id_front', '')} />
-                          <ImageUploader label="反面" image={g.id_back} onUpload={(e) => handleImageUpload(e, 'person', idx, 'id_back', 'guarantors')} onRemove={() => handlePersonChange('guarantors', idx, 'id_back', '')} />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <ImageUploader label="正面" image={g.id_front} onUpload={(e:any) => handleImageUpload(e, 'person', idx, 'id_front', 'guarantors')} onRemove={() => handlePersonChange('guarantors', idx, 'id_front', '')} />
+                          <ImageUploader label="反面" image={g.id_back} onUpload={(e:any) => handleImageUpload(e, 'person', idx, 'id_back', 'guarantors')} onRemove={() => handlePersonChange('guarantors', idx, 'id_back', '')} />
                         </div>
                       </div>
                     ))}
@@ -673,7 +612,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                     <label className="text-sm font-black text-[#3E342E] mb-4 block">房屋現況與設備存證照片 (最多 15 張)</label>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                       {draft.property_photos.map((photo, idx) => (
-                        <ImageUploader key={`prop-photo-${idx}`} label={`照片 ${idx + 1}`} image={photo} isSmall onUpload={(e) => handleImageUpload(e, 'property', idx)} onRemove={() => { const newPhotos = [...draft.property_photos]; newPhotos[idx] = ''; setDraft({...draft, property_photos: newPhotos}); }} />
+                        <ImageUploader key={`prop-photo-${idx}`} label={`照片 ${idx + 1}`} image={photo} isSmall onUpload={(e:any) => handleImageUpload(e, 'property', idx)} onRemove={() => { const newPhotos = [...draft.property_photos]; newPhotos[idx] = ''; setDraft({...draft, property_photos: newPhotos}); }} />
                       ))}
                     </div>
                   </div>
@@ -690,18 +629,18 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
           </div>
         )}
 
-        {/* ================= 預覽與列印模式 ================= */}
+        {/* ================= 預覽與列印模式 (手機自適應閱覽) ================= */}
         {viewMode === 'preview' && viewingContract && (
-          <div className="animate-in slide-in-from-bottom-8 max-w-[210mm] mx-auto">
-            <div className="flex justify-between items-center mb-6 px-4">
+          <div className="animate-in slide-in-from-bottom-8 max-w-[800px] mx-auto">
+            <div className="flex justify-between items-center mb-6">
               <h2 className="font-black text-xl text-[#3E342E]">合約文件預覽</h2>
               <button onClick={handlePrint} className="bg-[#3E342E] text-white px-5 py-3 rounded-full text-sm font-black flex items-center gap-2 shadow-lg hover:scale-105 transition-all print:hidden">
                 <Printer className="w-5 h-5" /> 匯出 / 列印 PDF
               </button>
             </div>
 
-            <div className="bg-gray-200 p-2 md:p-8 rounded-[12px] shadow-2xl overflow-x-auto print:p-0 print:shadow-none print:bg-transparent">
-              <div ref={printRef} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-[210mm] bg-white text-[#3E342E] mx-auto print:m-0 print:p-0 print:w-full shadow-md print:shadow-none">
+            <div className="bg-[#EFEBE8] md:bg-gray-200 p-0 md:p-8 rounded-none md:rounded-[12px] shadow-none md:shadow-2xl w-full overflow-hidden">
+              <div ref={printRef} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-full md:w-[210mm] bg-white text-[#3E342E] mx-auto print:m-0 print:p-0 print:w-[210mm] md:shadow-md print:shadow-none box-border">
                 <FullLeaseDocument contract={viewingContract} />
               </div>
             </div>
@@ -729,8 +668,8 @@ function ConsentDocument({ contract }: { contract: any }) {
   const tenantNames = tenants.map((t:any) => t.name).filter(Boolean).join('、 ');
 
   return (
-    <div className="text-justify text-[12pt] leading-[2] font-serif text-[#3E342E] p-[20mm] min-h-[297mm]">
-      <h1 className="text-3xl font-black text-center mb-16 tracking-[0.8em]">轉租同意書</h1>
+    <div className="text-justify text-sm md:text-[12pt] leading-[2] font-serif text-[#3E342E] p-6 md:p-[20mm] print:p-[20mm] min-h-0 print:min-h-[297mm]">
+      <h1 className="text-2xl md:text-3xl font-black text-center mb-16 tracking-[0.8em]">轉租同意書</h1>
       <div className="space-y-8">
         <p>立同意書人(即房屋所有權人)： <span className="font-bold border-b border-black px-4">{contract.original_owner || '_________________'}</span> (以下簡稱甲方)</p>
         <p>茲同意承租人： <span className="font-bold border-b border-black px-4">{tenantNames || '_________________'}</span> (以下簡稱乙方)</p>
@@ -761,42 +700,40 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
   const propertyAddress = details.property_address || contract.room_number || '________________';
 
   return (
-    <div className="text-justify text-[11pt] leading-[1.8] font-serif text-[#3E342E] p-[15mm]">
-      {/* 封面 */}
-      <div className="break-after-page flex flex-col pt-24 pb-12 min-h-[260mm] px-10 relative">
-        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E]"></div>
-        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74]"></div>
+    <div className="text-justify text-sm md:text-[11pt] leading-[1.8] font-serif text-[#3E342E] p-6 md:p-[15mm] print:p-[15mm]">
+      <div className="break-after-page flex flex-col pt-12 md:pt-24 pb-12 min-h-0 print:min-h-[260mm] px-4 md:px-10 relative">
+        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E] hidden md:block"></div>
+        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74] hidden md:block"></div>
 
         <div className="flex-1 flex flex-col">
-          <div className="mt-20 text-left">
-            <p className="text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Master Lease Agreement</p>
-            <h1 className="text-[2.5rem] md:text-[3rem] font-black tracking-[0.2em] text-[#3E342E] leading-tight">房屋租賃契約書<br/><span className="text-2xl tracking-[0.5em] text-[#8E7F74] mt-2 block">(包租專用)</span></h1>
+          <div className="mt-10 md:mt-20 text-left">
+            <p className="text-xs md:text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Master Lease Agreement</p>
+            <h1 className="text-3xl md:text-[3rem] font-black tracking-[0.2em] text-[#3E342E] leading-tight">房屋租賃契約書<br/><span className="text-xl md:text-2xl tracking-[0.5em] text-[#8E7F74] mt-2 block">(包租專用)</span></h1>
           </div>
 
-          <div className="mt-auto mb-24 space-y-8 text-lg text-[#3E342E] pl-6 border-l border-[#D1C7C0]">
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">出租人(屋主)</span>
+          <div className="mt-12 md:mt-auto mb-12 md:mb-24 space-y-6 md:space-y-8 text-base md:text-lg text-[#3E342E] pl-4 md:pl-6 border-l border-[#D1C7C0]">
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">出租人(屋主)</span>
               <span className="flex-1 tracking-widest">{landlordName}</span>
             </div>
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">承租人(包租)</span>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">承租人(包租)</span>
               <span className="flex-1 tracking-widest">{tenantNames}</span>
             </div>
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">租賃標的</span>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">租賃標的</span>
               <span className="flex-1 font-bold tracking-widest">{propertyAddress}</span>
             </div>
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">租賃期間</span>
-              <span className="flex-1 text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">租賃期間</span>
+              <span className="flex-1 text-sm md:text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 內文 */}
-      <div className="break-after-page min-h-[297mm]">
-        <h1 className="text-2xl font-black text-center mb-8 tracking-[0.5em] text-[#3E342E]">包租契約書</h1>
+      <div className="break-after-page min-h-0 print:min-h-[297mm]">
+        <h1 className="text-xl md:text-2xl font-black text-center mb-8 tracking-[0.5em] text-[#3E342E]">包租契約書</h1>
         <p className="mb-6">立契約書人：出租人(屋主) <strong>{landlordName}</strong> (以下簡稱甲方)、承租人(包租業) <strong>{tenantNames}</strong> (以下簡稱乙方)，茲為房屋租賃事宜，雙方同意本契約條款如下：</p>
 
         <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2 mt-6">第一條 租賃標的與轉租權限</h3>
@@ -819,7 +756,6 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
           <p>4. 租期屆滿或終止時，乙方返還房屋之狀態約定為： ☐ 回復原狀 ☑ <strong>現況返還 (乙方同意保留裝潢現有價值無償移轉予甲方，不另要求回復原狀)</strong></p>
         </div>
 
-        {/* ✅ 強大的裝潢殘值買回機制 (核實認列) */}
         <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2 mt-6">第四條 提前解約與裝潢補償機制</h3>
         <div className="pl-4 space-y-3 mb-6 text-justify">
           <p>5. 租賃期間內，乙方若因經營考量需提前終止本約，應於 <strong>2</strong> 個月前通知甲方，並支付 <strong>1</strong> 個月租金作為違約金後，得終止本約。屋內既有裝潢無償歸甲方所有。</p>
@@ -828,7 +764,7 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
             <p>6. 租賃期間內，甲方若因私人因素需提前收回房屋（除乙方重大違約外），應於 <strong>2</strong> 個月前通知乙方，並須無條件退還全額押金。此外，甲方應向乙方支付以下兩項賠償：</p>
             <ul className="list-disc pl-6 mt-2 space-y-1 text-sm text-[#3E342E]">
               <li><strong>一般違約金：</strong> 相當於 1 個月之租金。</li>
-              <li><strong>裝潢殘值買回補償金：</strong> 乙方期初投入之裝潢總成本，<strong className="text-[#b91c1c]">以乙方完工後出具之實際裝修憑證（含發票、收據、報價單或匯款證明）總額為準</strong>。若甲方提前終止租約，導致乙方無法攤提裝潢成本，甲方須按「剩餘租期比例」買回裝潢殘值。計算公式為：<br/>
+              <li><strong>裝潢殘值買回補償金：</strong> 乙方期初投入之裝潢總成本，<strong className="text-[#b91c1c]">以乙方完工後出具之實際裝修憑證總額為準</strong>。若甲方提前終止租約，甲方須按「剩餘租期比例」買回裝潢殘值。計算公式為：<br/>
               <span className="bg-white px-2 py-1 inline-block mt-1 font-bold border border-[#D1C7C0]">實際核認裝潢總成本 × (剩餘未滿租期之月數 ÷ 總約定租期月數)</span></li>
             </ul>
             <p className="mt-2 text-sm">甲方須全額支付上述金額後，本契約始得終止，乙方方有返還房屋之義務。</p>
@@ -837,35 +773,33 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
 
         <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2 mt-6">第五條 押金與租金</h3>
         <div className="pl-4 space-y-2 mb-10">
-          <p>7. 租金每月新台幣 <strong>{contract.rent_amount?.toLocaleString() || 0}</strong> 元整。</p>
+          <p>7. 租金每月新台幣 <strong>{contract.rent_amount?.toLocaleString() || 0}</strong> 元整。每月為一期，應於每月 <strong>{details.rent_due_day || 1}</strong> 日前支付。</p>
           <p>8. 押金為新台幣 <strong>{contract.deposit_amount?.toLocaleString() || 0}</strong> 元整。</p>
         </div>
 
-        <div className="break-inside-avoid mt-16 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
+        <div className="break-inside-avoid mt-10 md:mt-16 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
           <h3 className="text-lg font-black border-b-2 border-[#3E342E] pb-2 mb-8 tracking-widest text-center">立契約書人簽章</h3>
-          <div className="flex flex-wrap gap-x-12 gap-y-16 justify-center">
-            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方/屋主) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
-            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方/包租業) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+          <div className="flex flex-col sm:flex-row gap-x-12 gap-y-12 justify-center">
+            <div className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方/屋主) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+            <div className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方/包租業) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
           </div>
         </div>
       </div>
 
-      {/* 附件：身分證 */}
       <div className="pt-4">
         <h2 className="text-xl font-black text-center border-b-2 border-[#3E342E] pb-2 mb-6 tracking-widest">契約附件 - 身分證影本留存</h2>
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-12">
           <div className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-white w-full max-w-[450px]">
             <h3 className="text-lg font-black text-center mb-6 text-[#8E7F74] border-b border-[#D1C7C0] pb-2">出租人 (甲方)：{landlordName}</h3>
-            <div className="flex flex-row justify-center gap-6">
+            <div className="flex flex-col sm:flex-row justify-center gap-6">
               <IDCard1to1 src={''} label="正面" />
               <IDCard1to1 src={''} label="反面" />
             </div>
           </div>
-          
           {tenants.map((t: any, idx: number) => (
             <div key={`idcard-t-${idx}`} className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-[#F9F7F5] w-full max-w-[450px]">
               <h3 className="text-lg font-black text-center mb-6 text-[#3E342E] border-b border-[#D1C7C0] pb-2">承租人 (乙方)：{t.name}</h3>
-              <div className="flex flex-row justify-center gap-6">
+              <div className="flex flex-col sm:flex-row justify-center gap-6">
                 <IDCard1to1 src={t.id_front} label="正面" />
                 <IDCard1to1 src={t.id_back} label="反面" />
               </div>
@@ -873,7 +807,6 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
           ))}
         </div>
       </div>
-
     </div>
   );
 }
@@ -903,35 +836,34 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
   const tenantNames = tenants.map((t:any) => t.name).filter(Boolean).join('、 ') || '________________';
 
   return (
-    <div className="text-justify text-[11pt] leading-[1.6] font-serif text-[#3E342E] p-[15mm]">
+    <div className="text-justify text-sm md:text-[11pt] leading-[1.6] font-serif text-[#3E342E] p-6 md:p-[15mm] print:p-[15mm]">
       
-      {/* ---------------- PAGE 0: 封面 ---------------- */}
-      <div className="break-after-page flex flex-col pt-24 pb-12 min-h-[260mm] px-10 relative">
-        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E]"></div>
-        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74]"></div>
+      <div className="break-after-page flex flex-col pt-12 md:pt-24 pb-12 min-h-0 print:min-h-[260mm] px-4 md:px-10 relative">
+        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E] hidden md:block"></div>
+        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74] hidden md:block"></div>
 
         <div className="flex-1 flex flex-col">
-          <div className="mt-20 text-left">
-            <p className="text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Residence Lease Agreement</p>
-            <h1 className="text-[2.5rem] md:text-[3rem] font-black tracking-[0.8em] text-[#3E342E] leading-tight">租賃契約書</h1>
+          <div className="mt-10 md:mt-20 text-left">
+            <p className="text-xs md:text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Residence Lease Agreement</p>
+            <h1 className="text-3xl md:text-[3rem] font-black tracking-[0.8em] text-[#3E342E] leading-tight">租賃契約書</h1>
           </div>
 
-          <div className="mt-auto mb-24 space-y-8 text-lg text-[#3E342E] pl-6 border-l border-[#D1C7C0]">
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">出租人</span>
+          <div className="mt-12 md:mt-auto mb-12 md:mb-24 space-y-6 md:space-y-8 text-base md:text-lg text-[#3E342E] pl-4 md:pl-6 border-l border-[#D1C7C0]">
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">出租人</span>
               <span className="flex-1 tracking-widest">{landlordName}</span>
             </div>
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">承租人</span>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">承租人</span>
               <span className="flex-1 tracking-widest">{tenantNames}</span>
             </div>
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">承租房號</span>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">承租房號</span>
               <span className="flex-1 font-bold tracking-widest">{contract.room_number || '________________'}</span>
             </div>
-            <div className="flex items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">租賃期間</span>
-              <span className="flex-1 text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">租賃期間</span>
+              <span className="flex-1 text-sm md:text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
             </div>
           </div>
 
@@ -941,41 +873,39 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
         </div>
       </div>
 
-      {/* ---------------- 第一段：主約與條款流動區 ---------------- */}
       <div className="break-after-page">
-        <h1 className="text-2xl font-black text-center mb-8 tracking-widest text-[#3E342E]">租賃契約書</h1>
+        <h1 className="text-xl md:text-2xl font-black text-center mb-8 tracking-widest text-[#3E342E]">租賃契約書</h1>
 
         <div className="space-y-4 mb-8 text-sm break-inside-avoid">
-          {/* ✅ 動態顯示出租方資訊 (轉租會帶入統編與字號) */}
           <div className="flex flex-col gap-1">
              <div className="flex gap-2"><strong className="min-w-[120px] text-[#8E7F74]">出租人 (甲方) :</strong> <span className="font-bold">{landlordName}</span></div>
              {contract.contract_type === 'sublease' && details.landlord?.company && <div className="flex gap-2"><strong className="min-w-[120px] text-[#8E7F74]">統一編號 :</strong> <span>{details.landlord.company}</span></div>}
              {contract.contract_type === 'sublease' && details.landlord?.license && <div className="flex gap-2"><strong className="min-w-[120px] text-[#8E7F74]">登記證字號 :</strong> <span>{details.landlord.license}</span></div>}
           </div>
           
-          <div className="border border-[#D1C7C0] p-4 rounded-lg bg-[#F9F7F5] space-y-2">
+          <div className="border border-[#D1C7C0] p-4 rounded-lg bg-[#F9F7F5] space-y-2 overflow-hidden">
             <strong className="block mb-2 border-b border-[#D1C7C0] pb-1 text-[#8E7F74]">承租人 (乙方)</strong>
             {tenants.map((t: any, i: number) => (
-              <div key={`p1-tenant-${i}`} className="grid grid-cols-2 gap-y-2 gap-x-4">
+              <div key={`p1-tenant-${i}`} className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4">
                 <p><strong>姓名 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.name}</span></p>
                 <p><strong>身分證字號 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.id_number}</span></p>
                 <p><strong>聯絡電話 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.phone}</span></p>
-                <p className="col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.address}</span></p>
-                {i !== tenants.length - 1 && <div className="col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
+                <p className="col-span-1 sm:col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.address}</span></p>
+                {i !== tenants.length - 1 && <div className="col-span-1 sm:col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
               </div>
             ))}
           </div>
 
           {guarantors.length > 0 && (
-            <div className="border border-[#D1C7C0] p-4 rounded-lg space-y-2">
+            <div className="border border-[#D1C7C0] p-4 rounded-lg space-y-2 overflow-hidden">
               <strong className="block mb-2 border-b border-[#D1C7C0] pb-1 text-[#8E7F74]">保證人</strong>
               {guarantors.map((g: any, i: number) => (
-                <div key={`p1-guar-${i}`} className="grid grid-cols-2 gap-y-2 gap-x-4">
+                <div key={`p1-guar-${i}`} className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4">
                   <p><strong>姓名 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.name}</span></p>
                   <p><strong>身分證字號 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.id_number}</span></p>
                   <p><strong>聯絡電話 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.phone}</span></p>
-                  <p className="col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.address}</span></p>
-                  {i !== guarantors.length - 1 && <div className="col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
+                  <p className="col-span-1 sm:col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.address}</span></p>
+                  {i !== guarantors.length - 1 && <div className="col-span-1 sm:col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
                 </div>
               ))}
             </div>
@@ -990,39 +920,41 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
             )}
             <p><strong>1. 租賃標的：</strong> 承租範圍為 <strong>{contract.room_number}</strong> 房。 (附屬設備詳如後附清單)</p>
             <p><strong>2. 租賃期間：</strong> 自民國 <strong>{contract.start_date?.split('-')[0] || '___'}</strong> 年 <strong>{contract.start_date?.split('-')[1] || '__'}</strong> 月 <strong>{contract.start_date?.split('-')[2] || '__'}</strong> 日起，至民國 <strong>{contract.end_date?.split('-')[0] || '___'}</strong> 年 <strong>{contract.end_date?.split('-')[1] || '__'}</strong> 月 <strong>{contract.end_date?.split('-')[2] || '__'}</strong> 日止。</p>
-            <p><strong>3. 租金約定及支付：</strong> 承租人每月房屋租金為新臺幣 <strong>{contract.rent_amount?.toLocaleString() || 0}</strong> 元整，每月為一期，應於每月 1 日前支付，不得藉任何理由拖延或拒絕。</p>
+            <p><strong>3. 租金約定及支付：</strong> 承租人每月房屋租金為新臺幣 <strong>{contract.rent_amount?.toLocaleString() || 0}</strong> 元整，每月為一期，應於每月 <strong>{details.rent_due_day || 1}</strong> 日前支付，不得藉任何理由拖延或拒絕。</p>
             <p><strong>4. 押金約定及返還：</strong> 押金為新臺幣 <strong>{contract.deposit_amount?.toLocaleString() || 0}</strong> 元整。於租期屆滿或租約終止，承租人返還房屋並抵充債務後無息返還。</p>
             <p><strong>5. 租金支付方式：</strong> {payment.method} {payment.method === '轉帳' ? `(金融機構: ${payment.bank} / 戶名: ${payment.account_name} / 帳號: ${payment.account})` : ''}</p>
             
             <div className="mt-4 break-inside-avoid">
-              <p className="font-bold mb-2">6. 租賃期間相關費用之約定：</p>
-              <table className="w-full border-collapse border border-[#3E342E] text-xs text-center">
-                <tbody>
-                  <tr>
-                    <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">大樓管理費<br/><span className="text-[9px] font-normal">(大樓維護用)</span></td>
-                    <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">{fees.management?.payer === '無' ? '☑ 無' : `☑ ${fees.management?.payer}負擔`} {fees.management?.amount > 0 ? `(每月 ${fees.management?.amount} 元)` : ''}</td>
-                    <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">水費</td>
-                    <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">☑ {fees.water?.payer}負擔 ({fees.water?.type})</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">空間管理費<br/><span className="text-[9px] font-normal">(代收/網路/清潔)</span></td>
-                    <td className="border border-[#3E342E] p-2 text-left pl-3">{fees.space?.payer === '無' ? '☑ 無' : `☑ ${fees.space?.payer}負擔`} {fees.space?.amount > 0 ? `(每月 ${fees.space?.amount} 元)` : ''}</td>
-                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">電費</td>
-                    <td className="border border-[#3E342E] p-2 text-left pl-3 leading-tight">
-                      ☑ {fees.electricity?.payer}負擔<br/>
-                      {fees.electricity?.billing_method === '依當期每度平均電價' && '以用電度數計費：每期依電費單之「當期每度平均電價」計收。'}
-                      {fees.electricity?.billing_method === '台電帳單自行繳納' && '依台電帳單自行繳納。'}
-                      {fees.electricity?.billing_method === '按度計費' && `以用電度數計費：每度約定 ${fees.electricity?.rate} 元計收。`}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">網路費</td>
-                    <td className="border border-[#3E342E] p-2 text-left pl-3">☑ {fees.internet?.payer}負擔 ({fees.internet?.type})</td>
-                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">稅費約定</td>
-                    <td className="border border-[#3E342E] p-2 text-left pl-3">房屋地價稅由出租人負擔。<br/>辦理公證： ☐ 是 ☑ 否</td>
-                  </tr>
-                </tbody>
-              </table>
+              <p className="font-bold mb-2">6. 租賃期間附加費用之約定：</p>
+              <div className="w-full overflow-x-auto">
+                <table className="w-full border-collapse border border-[#3E342E] text-xs text-center min-w-[500px]">
+                  <tbody>
+                    <tr>
+                      <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">大樓管理費<br/><span className="text-[9px] font-normal">(大樓維護用)</span></td>
+                      <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">{fees.management?.amount ? `☑ ${fees.management.payer}負擔 (每月 ${fees.management.amount} 元)` : '☑ 無'}</td>
+                      <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">水費</td>
+                      <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">☑ {fees.water?.payer}負擔 ({fees.water?.type})</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">空間管理費<br/><span className="text-[9px] font-normal">(代收/網路/清潔)</span></td>
+                      <td className="border border-[#3E342E] p-2 text-left pl-3">{fees.space?.amount ? `☑ ${fees.space.payer}負擔 (每月 ${fees.space.amount} 元)` : '☑ 無'}</td>
+                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">電費</td>
+                      <td className="border border-[#3E342E] p-2 text-left pl-3 leading-tight">
+                        ☑ {fees.electricity?.payer}負擔<br/>
+                        {fees.electricity?.billing_method === '依當期每度平均電價' && '以用電度數計費：每期依電費單之「當期每度平均電價」計收。'}
+                        {fees.electricity?.billing_method === '台電帳單自行繳納' && '依台電帳單自行繳納。'}
+                        {fees.electricity?.billing_method === '按度計費' && `以用電度數計費：每度約定 ${fees.electricity?.rate} 元計收。`}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">網路費</td>
+                      <td className="border border-[#3E342E] p-2 text-left pl-3">☑ {fees.internet?.payer}負擔 ({fees.internet?.type})</td>
+                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">稅費約定</td>
+                      <td className="border border-[#3E342E] p-2 text-left pl-3">房屋地價稅由出租人負擔。<br/>辦理公證： ☐ 是 ☑ 否</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -1074,19 +1006,19 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
         <div className="break-inside-avoid mb-6">
           <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2">七、寵物飼養與違約責任</h3>
           <div className="pl-4 space-y-2 text-sm text-justify">
-            <p>本租賃標的原則上禁止飼養寵物（包含但不限於狗、貓、爬蟲類等），除經出租人同意並簽署寵物條款者不在此限。針對寵物飼養行為，雙方同意依下列規範辦理：</p>
-            <p><strong>1. 未經同意擅自飼養（偷養）之罰則：</strong> 若乙方未經同意擅自攜帶寵物進入飼養（包含暫放），視為重大違約：</p>
+            <p>本租賃標的原則上禁止飼養寵物（包含但不限於狗、貓、爬蟲類等），除經出租人書面同意並簽署寵物條款者不在此限。針對寵物飼養行為，雙方同意依下列規範辦理：</p>
+            <p><strong>1. 未經同意擅自飼養（偷養）之罰則：</strong> 若乙方未經書面同意，擅自攜帶寵物進入租賃標的飼養（包含暫放），視為重大違約：</p>
             <ul className="list-disc pl-8 space-y-0.5">
               <li><strong>懲罰性違約金：</strong> 乙方應支付相當於一個月租金之懲罰性違約金。</li>
-              <li><strong>限期遷離：</strong> 乙方應於甲方通知後 3 日內 將寵物遷離。</li>
+              <li><strong>限期遷離：</strong> 乙方應於甲方發現並通知後 3 日內 將寵物遷離。</li>
               <li><strong>強制清潔費：</strong> 乙方需負擔全室專業除蟲、消毒及細部清潔費用。</li>
               <li><strong>終止契約：</strong> 若乙方拒絕將寵物遷離，甲方得終止租約。</li>
             </ul>
             <p><strong>2. 經同意飼養但造成滋擾（吵鬧/異味）之罰則：</strong> 若該寵物之行為干擾鄰居安寧或公共衛生，遭投訴達 2 次（含）以上者：</p>
             <ul className="list-disc pl-8 space-y-0.5">
               <li><strong>撤銷飼養許可：</strong> 甲方有權撤銷許可，乙方應於 7 日內 將寵物遷離。</li>
-              <li><strong>損害賠償：</strong> 若導致甲方遭管委會裁罰，乙方應負擔全額罰款。</li>
-              <li><strong>終止契約：</strong> 若未將寵物遷離，甲方得終止租賃契約。</li>
+              <li><strong>損害賠償：</strong> 若導致甲方遭管委會裁罰，乙方應負擔全額罰款及賠償。</li>
+              <li><strong>終止契約：</strong> 若未將寵物遷離或再度私自带回，甲方得終止租賃契約。</li>
             </ul>
           </div>
         </div>
@@ -1124,18 +1056,17 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           <div className="pl-4 space-y-1 text-sm"><p>本契約自簽約日起生效，雙方各執一份。廣告及附件為本契約之一部分。</p></div>
         </div>
 
-        {/* 簽名區塊保護不被切斷 */}
-        <div className="break-inside-avoid mt-12 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
+        <div className="break-inside-avoid mt-10 md:mt-12 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
           <h3 className="text-lg font-black border-b-2 border-[#3E342E] pb-2 mb-8 tracking-widest text-center">立契約書人簽章</h3>
-          <div className="flex flex-wrap gap-x-12 gap-y-16 justify-center">
-            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+          <div className="flex flex-col sm:flex-row gap-x-12 gap-y-12 justify-center">
+            <div className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
             
             {tenants.map((t: any, i: number) => (
-              <div key={`sig-t-${i}`} className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方) {tenants.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+              <div key={`sig-t-${i}`} className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方) {tenants.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
             ))}
 
             {guarantors.map((g: any, i: number) => (
-              <div key={`sig-g-${i}`} className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">保證人 {guarantors.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+              <div key={`sig-g-${i}`} className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">保證人 {guarantors.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
             ))}
           </div>
         </div>
@@ -1144,11 +1075,11 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
 
       {/* ---------------- 附件：設備點交 ---------------- */}
       <div className="break-after-page pt-4">
-        <div className="break-inside-avoid">
+        <div className="break-inside-avoid w-full overflow-x-auto pb-4">
           <h2 className="text-xl font-black text-center border-b-2 border-[#3E342E] pb-2 mb-6 tracking-widest">附件：附屬設備與點交清單</h2>
           <p className="text-xs mb-3 text-[#8E7F74]">(以下項目請於簽約點交時確認數量，現狀交屋建議拍照存證)</p>
 
-          <table className="w-full border-collapse border border-[#3E342E] text-sm text-center mb-6">
+          <table className="w-full border-collapse border border-[#3E342E] text-sm text-center mb-6 min-w-[500px]">
             <thead>
               <tr className="bg-[#F9F7F5] text-[#3E342E]">
                 <th className="border border-[#3E342E] p-2 w-[12%]">區域</th>
@@ -1192,7 +1123,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mt-4 mb-3">附件：其他約定事項協議</h3>
           <div className="pl-4 space-y-3 text-sm text-justify">
             <p><strong>1. 消耗性物品：</strong> 本房屋內所需更換之消耗性物品由使用者自行負責（例：燈管、燈泡、電池、遙控器電池、濾心...等）。</p>
-            <p><strong>2. 退租清潔：</strong> 承租人於合約期滿後退租時，應自行於房屋使用範圍內清潔乾淨（包含廢棄物清運），經由出租人確認無誤後方可完成退租點交。若承租人於退租時無自行清潔，則由出租人代為尋找合法立案之清潔公司進行清潔/消毒，其清潔費用將由承租人負擔（可由押金扣除）。</p>
+            <p><strong>2. 退租清潔：</strong> 承租人於合合約期滿後退租時，應自行於房屋使用範圍內清潔乾淨（包含廢棄物清運），經由出租人確認無誤後方可完成退租點交。若承租人於退租時無自行清潔，則由出租人代為尋找合法立案之清潔公司進行清潔/消毒，其清潔費用將由承租人負擔（可由押金扣除）。</p>
             <p><strong>3. 手動補充約定：</strong></p>
             <p className="whitespace-pre-line font-bold bg-[#F9F7F5] p-5 border border-[#D1C7C0] rounded-lg text-base leading-relaxed">{contract.special_terms}</p>
           </div>
@@ -1257,7 +1188,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           {tenants.map((t: any, idx: number) => (
             <div key={`idcard-t-${idx}`} className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-[#F9F7F5] w-full max-w-[450px]">
               <h3 className="text-lg font-black text-center mb-6 text-[#3E342E] border-b border-[#D1C7C0] pb-2">承租人 {idx+1}：{t.name}</h3>
-              <div className="flex flex-row justify-center gap-6">
+              <div className="flex flex-col sm:flex-row justify-center gap-6">
                 <IDCard1to1 src={t.id_front} label="正面" />
                 <IDCard1to1 src={t.id_back} label="反面" />
               </div>
@@ -1267,7 +1198,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           {guarantors.map((g: any, idx: number) => (
             <div key={`idcard-g-${idx}`} className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-white w-full max-w-[450px]">
               <h3 className="text-lg font-black text-center mb-6 text-[#8E7F74] border-b border-[#D1C7C0] pb-2">保證人 {idx+1}：{g.name}</h3>
-              <div className="flex flex-row justify-center gap-6">
+              <div className="flex flex-col sm:flex-row justify-center gap-6">
                 <IDCard1to1 src={g.id_front} label="正面" />
                 <IDCard1to1 src={g.id_back} label="反面" />
               </div>
@@ -1299,7 +1230,6 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
 // 輔助 UI 元件庫
 // ==========================================
 
-// ✅ 1:1 實體比例身分證防偽浮水印元件 (85.6mm x 54mm)
 function IDCard1to1({ src, label }: { src: string, label: string }) {
   return (
     <div className="flex flex-col items-center">
@@ -1327,10 +1257,10 @@ function SectionTitle({ title }: { title: string }) { return <h3 className="text
 interface CardProps { icon: React.ReactNode; title: string; onClick: () => void; }
 function ContractTypeCard({ icon, title, onClick }: CardProps) { return <div onClick={onClick} className="bg-white p-5 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center cursor-pointer border border-[#EFEBE8] hover:border-[#3E342E] transition-all active:scale-95 group"><div className="bg-[#F9F7F5] p-3 rounded-full mb-2 group-hover:scale-110 transition-transform">{icon}</div><h3 className="font-black text-sm text-[#3E342E]">{title}</h3></div>; }
 
-interface InputProps { label: string; value: string | number; onChange: (v: string) => void; placeholder?: string; }
+interface InputProps { label: string; value: string | number; onChange: (v: any) => void; placeholder?: string; prefix?: string; }
 function InputText({ label, value, onChange, placeholder }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold focus:border-[#3E342E] outline-none box-border" /></div>; }
 function InputDate({ label, value, onChange }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><input type="date" value={value as string} onChange={(e) => onChange(e.target.value)} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold outline-none text-[#3E342E] box-border" /></div>; }
-function InputRow({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void; }) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#D1C7C0]">NT$</span><input type="number" value={value || ''} onChange={(e) => onChange(Number(e.target.value))} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl pl-12 pr-4 text-sm font-bold outline-none text-[#3E342E] box-border" /></div></div>; }
+function InputRow({ label, value, onChange, prefix = 'NT$', placeholder = '' }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><div className="relative">{prefix && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#D1C7C0]">{prefix}</span>}<input type="number" value={value === 0 ? '' : value} onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))} placeholder={placeholder} className={`w-full h-12 bg-white border border-[#D1C7C0] rounded-xl ${prefix ? 'pl-12' : 'pl-4'} pr-4 text-sm font-bold outline-none text-[#3E342E] box-border`} /></div></div>; }
 
 interface ImageUploaderProps { label: string; image: string; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemove: () => void; isSmall?: boolean; }
 function ImageUploader({ label, image, onUpload, onRemove, isSmall }: ImageUploaderProps) {

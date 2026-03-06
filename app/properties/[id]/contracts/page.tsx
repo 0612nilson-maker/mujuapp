@@ -41,6 +41,12 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
   const [viewingContract, setViewingContract] = useState<any | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // 用於控制手機版預覽縮放的狀態
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [previewHeight, setPreviewHeight] = useState<number | 'auto'>('auto');
+
   const [draft, setDraft] = useState({
     contract_type: 'general', room_number: '', property_address: '',
     landlord_name: '', landlord_id: '', landlord_company: '', landlord_address: '', landlord_license: '', 
@@ -62,6 +68,39 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
   };
 
   useEffect(() => { fetchData(); }, [params.id]);
+
+  // ✅ 自動縮放引擎：讓 A4 尺寸完美塞進手機螢幕
+  useEffect(() => {
+    if (viewMode === 'preview' && printRef.current && previewContainerRef.current) {
+      const updateLayout = () => {
+        if (previewContainerRef.current && printRef.current) {
+          const containerWidth = previewContainerRef.current.offsetWidth;
+          const targetWidth = 794; // 標準 A4 寬度對應的像素
+          
+          if (containerWidth < targetWidth && containerWidth > 0) {
+            const scale = containerWidth / targetWidth;
+            setPreviewScale(scale);
+            const unscaledHeight = printRef.current.scrollHeight;
+            setPreviewHeight(unscaledHeight * scale);
+          } else {
+            setPreviewScale(1);
+            setPreviewHeight('auto');
+          }
+        }
+      };
+
+      const resizeObserver = new ResizeObserver(() => updateLayout());
+      resizeObserver.observe(printRef.current);
+      resizeObserver.observe(previewContainerRef.current);
+      window.addEventListener('resize', updateLayout);
+      setTimeout(updateLayout, 100);
+
+      return () => {
+        resizeObserver.disconnect();
+        window.removeEventListener('resize', updateLayout);
+      };
+    }
+  }, [viewMode, viewingContract]);
 
   const handleRoomSelect = (room_number: string) => {
     const room = availableRooms.find(r => r.room_number === room_number);
@@ -242,7 +281,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
     });
   }
 
-  const printRef = useRef<HTMLDivElement>(null);
+  // ✅ 修復：之前遺漏的 const printContent = printRef.current;
   const handlePrint = () => {
     const printContent = printRef.current;
     if (printContent) {
@@ -338,12 +377,9 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
               {editingId && <span className="bg-[#EFEBE8] text-[#3E342E] text-xs px-3 py-1 rounded-full font-bold ml-2">編輯模式</span>}
             </h2>
 
-            {/* 1. 當事人與房屋基本資料 */}
             <section className="space-y-4">
               <SectionTitle title="一、基本資料與對象" />
-              
               <div className="bg-[#F9F7F5] p-5 md:p-6 rounded-2xl border border-[#EFEBE8] grid grid-cols-1 md:grid-cols-2 gap-6">
-                
                 {draft.contract_type === 'master' ? (
                   <div className="col-span-1 md:col-span-2 space-y-1">
                     <label className="text-[10px] font-black text-[#8E7F74]">包租標的地址 (整棟/整層) *</label>
@@ -357,19 +393,16 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                     </select>
                   </div>
                 )}
-                
                 {(draft.contract_type === 'sublease' || draft.contract_type === 'consent' || draft.contract_type === 'master') && (
                   <div className="col-span-1">
                     <InputText label="原所有權人(原屋主)姓名" value={draft.original_owner} onChange={(v:any) => setDraft({...draft, original_owner: v})} />
                   </div>
                 )}
-                
                 <div className="col-span-1 md:col-span-2 pt-4 border-t border-[#D1C7C0]">
                   <h4 className="font-bold text-sm text-[#3E342E] mb-4">出租方資訊 (甲方)</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="col-span-1"><InputText label="出租方名稱/姓名" value={draft.landlord_name} onChange={(v:any) => setDraft({...draft, landlord_name: v})} /></div>
                     <div className="col-span-1"><InputText label="身分證/負責人" value={draft.landlord_id} onChange={(v:any) => setDraft({...draft, landlord_id: v})} /></div>
-                    
                     {draft.contract_type !== 'general' && (
                       <>
                         <div className="col-span-1"><InputText label="統一編號" value={draft.landlord_company} onChange={(v:any) => setDraft({...draft, landlord_company: v})} /></div>
@@ -422,19 +455,15 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
               </div>
             </section>
 
-            {/* 轉租同意書不需要下面這些填寫 */}
             {draft.contract_type !== 'consent' && (
               <>
-              {/* 2. 租期與財務 */}
               <section className="space-y-4">
                 <SectionTitle title="二、租期、租金與帳戶" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="col-span-1"><InputDate label="起租日 *" value={draft.start_date} onChange={(v:any) => setDraft({...draft, start_date: v})} /></div>
                   <div className="col-span-1"><InputDate label="退租日 *" value={draft.end_date} onChange={(v:any) => setDraft({...draft, end_date: v})} /></div>
                   <div className="col-span-1"><InputRow label="每月租金 *" value={draft.rent_amount} onChange={(v:any) => setDraft({...draft, rent_amount: v})} prefix="NT$" /></div>
-                  
                   <div className="col-span-1"><InputRow label="每月收租日 (號) *" value={draft.rent_due_day as any} onChange={(v:any) => setDraft({...draft, rent_due_day: v})} prefix="" placeholder="例: 5" /></div>
-
                   <div className="col-span-1 md:col-span-2"><InputRow label="押金總額 (通常為2個月) *" value={draft.deposit_amount} onChange={(v:any) => setDraft({...draft, deposit_amount: v})} prefix="NT$" /></div>
                   
                   {draft.contract_type === 'master' && (
@@ -466,7 +495,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                 </div>
               </section>
 
-              {/* 3. 費用與設備 */}
               {draft.contract_type !== 'master' && (
                 <section className="space-y-4">
                   <SectionTitle title="三、附加費用設定與設備點交" />
@@ -536,7 +564,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                 </section>
               )}
 
-              {/* 4. 特約與約定 */}
               <section className="space-y-4">
                 <SectionTitle title="四、客製條款與終止約定" />
                 
@@ -576,7 +603,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                 </div>
               </section>
 
-              {/* 5. 附件上傳區 */}
               <section className="space-y-4">
                 <SectionTitle title="五、數位身分證與照片上傳" />
                 
@@ -606,7 +632,6 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
                   </div>
                 )}
 
-                {/* 包租契約不需要傳現況照片 */}
                 {draft.contract_type !== 'master' && (
                   <div className="mt-8 bg-[#F9F7F5] p-5 rounded-2xl border border-[#EFEBE8]">
                     <label className="text-sm font-black text-[#3E342E] mb-4 block">房屋現況與設備存證照片 (最多 15 張)</label>
@@ -631,7 +656,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
 
         {/* ================= 預覽與列印模式 (手機自適應閱覽) ================= */}
         {viewMode === 'preview' && viewingContract && (
-          <div className="animate-in slide-in-from-bottom-8 max-w-[800px] mx-auto">
+          <div className="animate-in slide-in-from-bottom-8 w-full max-w-[800px] mx-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-black text-xl text-[#3E342E]">合約文件預覽</h2>
               <button onClick={handlePrint} className="bg-[#3E342E] text-white px-5 py-3 rounded-full text-sm font-black flex items-center gap-2 shadow-lg hover:scale-105 transition-all print:hidden">
@@ -639,8 +664,23 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
               </button>
             </div>
 
-            <div className="bg-[#EFEBE8] md:bg-gray-200 p-0 md:p-8 rounded-none md:rounded-[12px] shadow-none md:shadow-2xl w-full overflow-hidden">
-              <div ref={printRef} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-full md:w-[210mm] bg-white text-[#3E342E] mx-auto print:m-0 print:p-0 print:w-[210mm] md:shadow-md print:shadow-none box-border">
+            {/* ✅ 自適應縮放引擎：透過 JavaScript 精算 A4 比例縮小 */}
+            <div 
+              ref={previewContainerRef} 
+              className="bg-[#EFEBE8] md:bg-gray-200 p-0 md:p-8 rounded-none md:rounded-[12px] shadow-none md:shadow-2xl w-full overflow-hidden print:p-0 print:bg-transparent" 
+              style={{ height: previewHeight !== 'auto' ? `${previewHeight}px` : 'auto' }}
+            >
+              <div 
+                ref={printRef} 
+                style={{ 
+                  WebkitPrintColorAdjust: 'exact', 
+                  printColorAdjust: 'exact',
+                  transform: previewScale < 1 ? `scale(${previewScale})` : 'none',
+                  transformOrigin: 'top left',
+                  width: '794px' // 強制 A4 寬度，再由外層引擎等比縮小
+                }} 
+                className="bg-white text-[#3E342E] mx-auto print:transform-none print:m-0 print:p-0 print:w-[210mm] shadow-md print:shadow-none box-border"
+              >
                 <FullLeaseDocument contract={viewingContract} />
               </div>
             </div>
@@ -653,7 +693,7 @@ export default function ContractsPage({ params }: { params: { id: string } }) {
 }
 
 // ==========================================
-// 核心：智慧路由 PDF 渲染引擎
+// 核心：智慧路由 PDF 渲染引擎 (已拔除所有 md: 響應式 class)
 // ==========================================
 function FullLeaseDocument({ contract }: { contract: any }) {
   if (contract.contract_type === 'consent') return <ConsentDocument contract={contract} />;
@@ -668,8 +708,8 @@ function ConsentDocument({ contract }: { contract: any }) {
   const tenantNames = tenants.map((t:any) => t.name).filter(Boolean).join('、 ');
 
   return (
-    <div className="text-justify text-sm md:text-[12pt] leading-[2] font-serif text-[#3E342E] p-6 md:p-[20mm] print:p-[20mm] min-h-0 print:min-h-[297mm]">
-      <h1 className="text-2xl md:text-3xl font-black text-center mb-16 tracking-[0.8em]">轉租同意書</h1>
+    <div className="text-justify text-[12pt] leading-[2] font-serif text-[#3E342E] p-[20mm] print:p-[20mm] min-h-[297mm]">
+      <h1 className="text-3xl font-black text-center mb-16 tracking-[0.8em]">轉租同意書</h1>
       <div className="space-y-8">
         <p>立同意書人(即房屋所有權人)： <span className="font-bold border-b border-black px-4">{contract.original_owner || '_________________'}</span> (以下簡稱甲方)</p>
         <p>茲同意承租人： <span className="font-bold border-b border-black px-4">{tenantNames || '_________________'}</span> (以下簡稱乙方)</p>
@@ -700,40 +740,40 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
   const propertyAddress = details.property_address || contract.room_number || '________________';
 
   return (
-    <div className="text-justify text-sm md:text-[11pt] leading-[1.8] font-serif text-[#3E342E] p-6 md:p-[15mm] print:p-[15mm]">
-      <div className="break-after-page flex flex-col pt-12 md:pt-24 pb-12 min-h-0 print:min-h-[260mm] px-4 md:px-10 relative">
-        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E] hidden md:block"></div>
-        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74] hidden md:block"></div>
+    <div className="text-justify text-[11pt] leading-[1.8] font-serif text-[#3E342E] p-[15mm] print:p-[15mm]">
+      <div className="break-after-page flex flex-col pt-24 pb-12 min-h-[260mm] px-10 relative">
+        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E] block"></div>
+        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74] block"></div>
 
         <div className="flex-1 flex flex-col">
-          <div className="mt-10 md:mt-20 text-left">
-            <p className="text-xs md:text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Master Lease Agreement</p>
-            <h1 className="text-3xl md:text-[3rem] font-black tracking-[0.2em] text-[#3E342E] leading-tight">房屋租賃契約書<br/><span className="text-xl md:text-2xl tracking-[0.5em] text-[#8E7F74] mt-2 block">(包租專用)</span></h1>
+          <div className="mt-20 text-left">
+            <p className="text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Master Lease Agreement</p>
+            <h1 className="text-[3rem] font-black tracking-[0.2em] text-[#3E342E] leading-tight">房屋租賃契約書<br/><span className="text-2xl tracking-[0.5em] text-[#8E7F74] mt-2 block">(包租專用)</span></h1>
           </div>
 
-          <div className="mt-12 md:mt-auto mb-12 md:mb-24 space-y-6 md:space-y-8 text-base md:text-lg text-[#3E342E] pl-4 md:pl-6 border-l border-[#D1C7C0]">
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">出租人(屋主)</span>
+          <div className="mt-auto mb-24 space-y-8 text-lg text-[#3E342E] pl-6 border-l border-[#D1C7C0]">
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">出租人(屋主)</span>
               <span className="flex-1 tracking-widest">{landlordName}</span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">承租人(包租)</span>
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">承租人(包租)</span>
               <span className="flex-1 tracking-widest">{tenantNames}</span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">租賃標的</span>
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">租賃標的</span>
               <span className="flex-1 font-bold tracking-widest">{propertyAddress}</span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">租賃期間</span>
-              <span className="flex-1 text-sm md:text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">租賃期間</span>
+              <span className="flex-1 text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="break-after-page min-h-0 print:min-h-[297mm]">
-        <h1 className="text-xl md:text-2xl font-black text-center mb-8 tracking-[0.5em] text-[#3E342E]">包租契約書</h1>
+      <div className="break-after-page min-h-[297mm]">
+        <h1 className="text-2xl font-black text-center mb-8 tracking-[0.5em] text-[#3E342E]">包租契約書</h1>
         <p className="mb-6">立契約書人：出租人(屋主) <strong>{landlordName}</strong> (以下簡稱甲方)、承租人(包租業) <strong>{tenantNames}</strong> (以下簡稱乙方)，茲為房屋租賃事宜，雙方同意本契約條款如下：</p>
 
         <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mb-2 mt-6">第一條 租賃標的與轉租權限</h3>
@@ -777,11 +817,11 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
           <p>8. 押金為新台幣 <strong>{contract.deposit_amount?.toLocaleString() || 0}</strong> 元整。</p>
         </div>
 
-        <div className="break-inside-avoid mt-10 md:mt-16 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
+        <div className="break-inside-avoid mt-16 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
           <h3 className="text-lg font-black border-b-2 border-[#3E342E] pb-2 mb-8 tracking-widest text-center">立契約書人簽章</h3>
-          <div className="flex flex-col sm:flex-row gap-x-12 gap-y-12 justify-center">
-            <div className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方/屋主) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
-            <div className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方/包租業) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+          <div className="flex flex-row gap-x-12 gap-y-12 justify-center">
+            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方/屋主) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方/包租業) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
           </div>
         </div>
       </div>
@@ -791,7 +831,7 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-12">
           <div className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-white w-full max-w-[450px]">
             <h3 className="text-lg font-black text-center mb-6 text-[#8E7F74] border-b border-[#D1C7C0] pb-2">出租人 (甲方)：{landlordName}</h3>
-            <div className="flex flex-col sm:flex-row justify-center gap-6">
+            <div className="flex flex-row justify-center gap-6">
               <IDCard1to1 src={''} label="正面" />
               <IDCard1to1 src={''} label="反面" />
             </div>
@@ -799,7 +839,7 @@ function MasterLeaseDocument({ contract }: { contract: any }) {
           {tenants.map((t: any, idx: number) => (
             <div key={`idcard-t-${idx}`} className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-[#F9F7F5] w-full max-w-[450px]">
               <h3 className="text-lg font-black text-center mb-6 text-[#3E342E] border-b border-[#D1C7C0] pb-2">承租人 (乙方)：{t.name}</h3>
-              <div className="flex flex-col sm:flex-row justify-center gap-6">
+              <div className="flex flex-row justify-center gap-6">
                 <IDCard1to1 src={t.id_front} label="正面" />
                 <IDCard1to1 src={t.id_back} label="反面" />
               </div>
@@ -836,34 +876,34 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
   const tenantNames = tenants.map((t:any) => t.name).filter(Boolean).join('、 ') || '________________';
 
   return (
-    <div className="text-justify text-sm md:text-[11pt] leading-[1.6] font-serif text-[#3E342E] p-6 md:p-[15mm] print:p-[15mm]">
+    <div className="text-justify text-[11pt] leading-[1.6] font-serif text-[#3E342E] p-[15mm] print:p-[15mm]">
       
-      <div className="break-after-page flex flex-col pt-12 md:pt-24 pb-12 min-h-0 print:min-h-[260mm] px-4 md:px-10 relative">
-        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E] hidden md:block"></div>
-        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74] hidden md:block"></div>
+      <div className="break-after-page flex flex-col pt-24 pb-12 min-h-[260mm] px-10 relative">
+        <div className="absolute top-10 left-10 w-12 h-[3px] bg-[#3E342E] block"></div>
+        <div className="absolute bottom-10 right-10 w-[3px] h-12 bg-[#8E7F74] block"></div>
 
         <div className="flex-1 flex flex-col">
-          <div className="mt-10 md:mt-20 text-left">
-            <p className="text-xs md:text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Residence Lease Agreement</p>
-            <h1 className="text-3xl md:text-[3rem] font-black tracking-[0.8em] text-[#3E342E] leading-tight">租賃契約書</h1>
+          <div className="mt-20 text-left">
+            <p className="text-sm uppercase tracking-[0.4em] text-[#8E7F74] mb-6 font-bold">Residence Lease Agreement</p>
+            <h1 className="text-[3rem] font-black tracking-[0.8em] text-[#3E342E] leading-tight">租賃契約書</h1>
           </div>
 
-          <div className="mt-12 md:mt-auto mb-12 md:mb-24 space-y-6 md:space-y-8 text-base md:text-lg text-[#3E342E] pl-4 md:pl-6 border-l border-[#D1C7C0]">
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">出租人</span>
+          <div className="mt-auto mb-24 space-y-8 text-lg text-[#3E342E] pl-6 border-l border-[#D1C7C0]">
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">出租人</span>
               <span className="flex-1 tracking-widest">{landlordName}</span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">承租人</span>
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">承租人</span>
               <span className="flex-1 tracking-widest">{tenantNames}</span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">承租房號</span>
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">承租房號</span>
               <span className="flex-1 font-bold tracking-widest">{contract.room_number || '________________'}</span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-xs md:text-sm">租賃期間</span>
-              <span className="flex-1 text-sm md:text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
+            <div className="flex flex-row items-center">
+              <span className="font-bold w-32 tracking-widest text-[#8E7F74] text-sm">租賃期間</span>
+              <span className="flex-1 text-base tracking-widest">{contract.start_date ? `${contract.start_date} 起至 ${contract.end_date} 止` : '________________'}</span>
             </div>
           </div>
 
@@ -874,7 +914,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
       </div>
 
       <div className="break-after-page">
-        <h1 className="text-xl md:text-2xl font-black text-center mb-8 tracking-widest text-[#3E342E]">租賃契約書</h1>
+        <h1 className="text-2xl font-black text-center mb-8 tracking-widest text-[#3E342E]">租賃契約書</h1>
 
         <div className="space-y-4 mb-8 text-sm break-inside-avoid">
           <div className="flex flex-col gap-1">
@@ -886,12 +926,12 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           <div className="border border-[#D1C7C0] p-4 rounded-lg bg-[#F9F7F5] space-y-2 overflow-hidden">
             <strong className="block mb-2 border-b border-[#D1C7C0] pb-1 text-[#8E7F74]">承租人 (乙方)</strong>
             {tenants.map((t: any, i: number) => (
-              <div key={`p1-tenant-${i}`} className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4">
+              <div key={`p1-tenant-${i}`} className="grid grid-cols-2 gap-y-2 gap-x-4">
                 <p><strong>姓名 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.name}</span></p>
                 <p><strong>身分證字號 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.id_number}</span></p>
                 <p><strong>聯絡電話 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.phone}</span></p>
-                <p className="col-span-1 sm:col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.address}</span></p>
-                {i !== tenants.length - 1 && <div className="col-span-1 sm:col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
+                <p className="col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{t.address}</span></p>
+                {i !== tenants.length - 1 && <div className="col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
               </div>
             ))}
           </div>
@@ -900,12 +940,12 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
             <div className="border border-[#D1C7C0] p-4 rounded-lg space-y-2 overflow-hidden">
               <strong className="block mb-2 border-b border-[#D1C7C0] pb-1 text-[#8E7F74]">保證人</strong>
               {guarantors.map((g: any, i: number) => (
-                <div key={`p1-guar-${i}`} className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4">
+                <div key={`p1-guar-${i}`} className="grid grid-cols-2 gap-y-2 gap-x-4">
                   <p><strong>姓名 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.name}</span></p>
                   <p><strong>身分證字號 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.id_number}</span></p>
                   <p><strong>聯絡電話 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.phone}</span></p>
-                  <p className="col-span-1 sm:col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.address}</span></p>
-                  {i !== guarantors.length - 1 && <div className="col-span-1 sm:col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
+                  <p className="col-span-2"><strong>戶籍地址 :</strong> <span className="underline decoration-dotted underline-offset-4">{g.address}</span></p>
+                  {i !== guarantors.length - 1 && <div className="col-span-2 border-b border-dashed border-[#D1C7C0] my-2"></div>}
                 </div>
               ))}
             </div>
@@ -926,35 +966,33 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
             
             <div className="mt-4 break-inside-avoid">
               <p className="font-bold mb-2">6. 租賃期間附加費用之約定：</p>
-              <div className="w-full overflow-x-auto">
-                <table className="w-full border-collapse border border-[#3E342E] text-xs text-center min-w-[500px]">
-                  <tbody>
-                    <tr>
-                      <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">大樓管理費<br/><span className="text-[9px] font-normal">(大樓維護用)</span></td>
-                      <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">{fees.management?.amount ? `☑ ${fees.management.payer}負擔 (每月 ${fees.management.amount} 元)` : '☑ 無'}</td>
-                      <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">水費</td>
-                      <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">☑ {fees.water?.payer}負擔 ({fees.water?.type})</td>
-                    </tr>
-                    <tr>
-                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">空間管理費<br/><span className="text-[9px] font-normal">(代收/網路/清潔)</span></td>
-                      <td className="border border-[#3E342E] p-2 text-left pl-3">{fees.space?.amount ? `☑ ${fees.space.payer}負擔 (每月 ${fees.space.amount} 元)` : '☑ 無'}</td>
-                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">電費</td>
-                      <td className="border border-[#3E342E] p-2 text-left pl-3 leading-tight">
-                        ☑ {fees.electricity?.payer}負擔<br/>
-                        {fees.electricity?.billing_method === '依當期每度平均電價' && '以用電度數計費：每期依電費單之「當期每度平均電價」計收。'}
-                        {fees.electricity?.billing_method === '台電帳單自行繳納' && '依台電帳單自行繳納。'}
-                        {fees.electricity?.billing_method === '按度計費' && `以用電度數計費：每度約定 ${fees.electricity?.rate} 元計收。`}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">網路費</td>
-                      <td className="border border-[#3E342E] p-2 text-left pl-3">☑ {fees.internet?.payer}負擔 ({fees.internet?.type})</td>
-                      <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">稅費約定</td>
-                      <td className="border border-[#3E342E] p-2 text-left pl-3">房屋地價稅由出租人負擔。<br/>辦理公證： ☐ 是 ☑ 否</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <table className="w-full border-collapse border border-[#3E342E] text-xs text-center">
+                <tbody>
+                  <tr>
+                    <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">大樓管理費<br/><span className="text-[9px] font-normal">(大樓維護用)</span></td>
+                    <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">{fees.management?.amount ? `☑ ${fees.management.payer}負擔 (每月 ${fees.management.amount} 元)` : '☑ 無'}</td>
+                    <td className="border border-[#3E342E] p-2 w-[20%] bg-[#F9F7F5] font-bold text-[#8E7F74]">水費</td>
+                    <td className="border border-[#3E342E] p-2 w-[30%] text-left pl-3">☑ {fees.water?.payer}負擔 ({fees.water?.type})</td>
+                  </tr>
+                  <tr>
+                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">空間管理費<br/><span className="text-[9px] font-normal">(代收/網路/清潔)</span></td>
+                    <td className="border border-[#3E342E] p-2 text-left pl-3">{fees.space?.amount ? `☑ ${fees.space.payer}負擔 (每月 ${fees.space.amount} 元)` : '☑ 無'}</td>
+                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">電費</td>
+                    <td className="border border-[#3E342E] p-2 text-left pl-3 leading-tight">
+                      ☑ {fees.electricity?.payer}負擔<br/>
+                      {fees.electricity?.billing_method === '依當期每度平均電價' && '以用電度數計費：每期依電費單之「當期每度平均電價」計收。'}
+                      {fees.electricity?.billing_method === '台電帳單自行繳納' && '依台電帳單自行繳納。'}
+                      {fees.electricity?.billing_method === '按度計費' && `以用電度數計費：每度約定 ${fees.electricity?.rate} 元計收。`}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">網路費</td>
+                    <td className="border border-[#3E342E] p-2 text-left pl-3">☑ {fees.internet?.payer}負擔 ({fees.internet?.type})</td>
+                    <td className="border border-[#3E342E] p-2 bg-[#F9F7F5] font-bold text-[#8E7F74]">稅費約定</td>
+                    <td className="border border-[#3E342E] p-2 text-left pl-3">房屋地價稅由出租人負擔。<br/>辦理公證： ☐ 是 ☑ 否</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1056,17 +1094,17 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           <div className="pl-4 space-y-1 text-sm"><p>本契約自簽約日起生效，雙方各執一份。廣告及附件為本契約之一部分。</p></div>
         </div>
 
-        <div className="break-inside-avoid mt-10 md:mt-12 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
+        <div className="break-inside-avoid mt-12 mb-8 bg-[#F9F7F5] p-6 rounded-xl border border-[#D1C7C0]">
           <h3 className="text-lg font-black border-b-2 border-[#3E342E] pb-2 mb-8 tracking-widest text-center">立契約書人簽章</h3>
-          <div className="flex flex-col sm:flex-row gap-x-12 gap-y-12 justify-center">
-            <div className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+          <div className="flex flex-row gap-x-12 gap-y-12 justify-center">
+            <div className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">出租人 (甲方) ：</p><div className="border-b border-[#3E342E] w-full"></div></div>
             
             {tenants.map((t: any, i: number) => (
-              <div key={`sig-t-${i}`} className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方) {tenants.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+              <div key={`sig-t-${i}`} className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">承租人 (乙方) {tenants.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
             ))}
 
             {guarantors.map((g: any, i: number) => (
-              <div key={`sig-g-${i}`} className="w-full sm:w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">保證人 {guarantors.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
+              <div key={`sig-g-${i}`} className="w-[40%]"><p className="font-bold mb-12 text-[#8E7F74]">保證人 {guarantors.length > 1 ? i+1 : ''}：</p><div className="border-b border-[#3E342E] w-full"></div></div>
             ))}
           </div>
         </div>
@@ -1075,11 +1113,11 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
 
       {/* ---------------- 附件：設備點交 ---------------- */}
       <div className="break-after-page pt-4">
-        <div className="break-inside-avoid w-full overflow-x-auto pb-4">
+        <div className="break-inside-avoid w-full pb-4">
           <h2 className="text-xl font-black text-center border-b-2 border-[#3E342E] pb-2 mb-6 tracking-widest">附件：附屬設備與點交清單</h2>
           <p className="text-xs mb-3 text-[#8E7F74]">(以下項目請於簽約點交時確認數量，現狀交屋建議拍照存證)</p>
 
-          <table className="w-full border-collapse border border-[#3E342E] text-sm text-center mb-6 min-w-[500px]">
+          <table className="w-full border-collapse border border-[#3E342E] text-sm text-center mb-6">
             <thead>
               <tr className="bg-[#F9F7F5] text-[#3E342E]">
                 <th className="border border-[#3E342E] p-2 w-[12%]">區域</th>
@@ -1123,7 +1161,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           <h3 className="text-md font-bold border-l-4 border-[#3E342E] pl-2 bg-[#F9F7F5] py-1 mt-4 mb-3">附件：其他約定事項協議</h3>
           <div className="pl-4 space-y-3 text-sm text-justify">
             <p><strong>1. 消耗性物品：</strong> 本房屋內所需更換之消耗性物品由使用者自行負責（例：燈管、燈泡、電池、遙控器電池、濾心...等）。</p>
-            <p><strong>2. 退租清潔：</strong> 承租人於合合約期滿後退租時，應自行於房屋使用範圍內清潔乾淨（包含廢棄物清運），經由出租人確認無誤後方可完成退租點交。若承租人於退租時無自行清潔，則由出租人代為尋找合法立案之清潔公司進行清潔/消毒，其清潔費用將由承租人負擔（可由押金扣除）。</p>
+            <p><strong>2. 退租清潔：</strong> 承租人於合約期滿後退租時，應自行於房屋使用範圍內清潔乾淨（包含廢棄物清運），經由出租人確認無誤後方可完成退租點交。若承租人於退租時無自行清潔，則由出租人代為尋找合法立案之清潔公司進行清潔/消毒，其清潔費用將由承租人負擔（可由押金扣除）。</p>
             <p><strong>3. 手動補充約定：</strong></p>
             <p className="whitespace-pre-line font-bold bg-[#F9F7F5] p-5 border border-[#D1C7C0] rounded-lg text-base leading-relaxed">{contract.special_terms}</p>
           </div>
@@ -1188,7 +1226,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           {tenants.map((t: any, idx: number) => (
             <div key={`idcard-t-${idx}`} className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-[#F9F7F5] w-full max-w-[450px]">
               <h3 className="text-lg font-black text-center mb-6 text-[#3E342E] border-b border-[#D1C7C0] pb-2">承租人 {idx+1}：{t.name}</h3>
-              <div className="flex flex-col sm:flex-row justify-center gap-6">
+              <div className="flex flex-row justify-center gap-6">
                 <IDCard1to1 src={t.id_front} label="正面" />
                 <IDCard1to1 src={t.id_back} label="反面" />
               </div>
@@ -1198,7 +1236,7 @@ function StandardLeaseDocument({ contract }: { contract: any }) {
           {guarantors.map((g: any, idx: number) => (
             <div key={`idcard-g-${idx}`} className="break-inside-avoid border-2 border-dashed border-[#D1C7C0] p-6 rounded-2xl bg-white w-full max-w-[450px]">
               <h3 className="text-lg font-black text-center mb-6 text-[#8E7F74] border-b border-[#D1C7C0] pb-2">保證人 {idx+1}：{g.name}</h3>
-              <div className="flex flex-col sm:flex-row justify-center gap-6">
+              <div className="flex flex-row justify-center gap-6">
                 <IDCard1to1 src={g.id_front} label="正面" />
                 <IDCard1to1 src={g.id_back} label="反面" />
               </div>
@@ -1257,7 +1295,7 @@ function SectionTitle({ title }: { title: string }) { return <h3 className="text
 interface CardProps { icon: React.ReactNode; title: string; onClick: () => void; }
 function ContractTypeCard({ icon, title, onClick }: CardProps) { return <div onClick={onClick} className="bg-white p-5 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center cursor-pointer border border-[#EFEBE8] hover:border-[#3E342E] transition-all active:scale-95 group"><div className="bg-[#F9F7F5] p-3 rounded-full mb-2 group-hover:scale-110 transition-transform">{icon}</div><h3 className="font-black text-sm text-[#3E342E]">{title}</h3></div>; }
 
-interface InputProps { label: string; value: string | number; onChange: (v: any) => void; placeholder?: string; prefix?: string; }
+interface InputProps { label: string; value: any; onChange: (v: any) => void; placeholder?: string; prefix?: string; }
 function InputText({ label, value, onChange, placeholder }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold focus:border-[#3E342E] outline-none box-border" /></div>; }
 function InputDate({ label, value, onChange }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><input type="date" value={value as string} onChange={(e) => onChange(e.target.value)} className="w-full h-12 bg-white border border-[#D1C7C0] rounded-xl px-4 text-sm font-bold outline-none text-[#3E342E] box-border" /></div>; }
 function InputRow({ label, value, onChange, prefix = 'NT$', placeholder = '' }: InputProps) { return <div className="space-y-1 w-full"><label className="text-[10px] font-black text-[#8E7F74] block">{label}</label><div className="relative">{prefix && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#D1C7C0]">{prefix}</span>}<input type="number" value={value === 0 ? '' : value} onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))} placeholder={placeholder} className={`w-full h-12 bg-white border border-[#D1C7C0] rounded-xl ${prefix ? 'pl-12' : 'pl-4'} pr-4 text-sm font-bold outline-none text-[#3E342E] box-border`} /></div></div>; }
